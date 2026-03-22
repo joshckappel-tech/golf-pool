@@ -1557,7 +1557,9 @@
         // Load live scores from API, update tournamentScores + prizeMap
         // Returns a promise so callers can await it
         function loadLiveScores() {
-            return fetch('/api/scores')
+            // Call /api/scores/update which fetches LIVE data from ESPN and caches it
+            // Falls back to /api/scores (cached) if update fails
+            return fetch('/api/scores/update')
               .then(res => res.json())
               .then(data => {
                 let players = [];
