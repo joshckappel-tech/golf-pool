@@ -89,7 +89,8 @@ export async function POST(request: NextRequest) {
       await (db as any).saveAllEntries(entries)
     } else {
       // KV path: use kv.set directly
-      const { kv } = await import('@vercel/kv')
+      const { Redis } = await import('@upstash/redis')
+      const kv = new Redis({ url: process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL || '', token: process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN || '' })
       await kv.set('entries', entries)
     }
 
@@ -126,7 +127,8 @@ export async function PUT(request: NextRequest) {
     if ('saveAllEntries' in db) {
       await (db as any).saveAllEntries(entries)
     } else {
-      const { kv } = await import('@vercel/kv')
+      const { Redis } = await import('@upstash/redis')
+      const kv = new Redis({ url: process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL || '', token: process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN || '' })
       await kv.set('entries', entries)
     }
 
