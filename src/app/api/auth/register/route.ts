@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { crypto } from 'node:crypto'
+import crypto from 'crypto'
 import { getUserByEmail, saveUser, saveSession } from '@/lib/db'
 
 interface RegisterRequest {
