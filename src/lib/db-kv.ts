@@ -1,4 +1,4 @@
-import { kv } from '@vercel/kv'
+import { Redis } from '@upstash/redis'
 import type { PoolSettings } from './db'
 
 // Re-export types
@@ -12,6 +12,12 @@ import type {
   TournamentGolfer,
   Entry,
 } from '@/types'
+
+// Create Redis client using Upstash env vars (with fallback to KV_ names)
+const kv = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL || '',
+  token: process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN || '',
+})
 
 // ============================================
 // DEFAULT DATA (for seeding)

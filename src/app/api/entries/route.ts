@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 async function getDb() {
-  if (process.env.KV_REST_API_URL) {
+  if (process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL) {
     return await import('@/lib/db-kv')
   }
   // Fallback: file-based for local dev

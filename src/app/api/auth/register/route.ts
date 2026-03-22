@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     // Use KV database on Vercel, file-based locally
     let db: any
     try {
-      if (process.env.KV_REST_API_URL) {
+      if (process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL) {
         db = await import('@/lib/db-kv')
       } else {
         db = await import('@/lib/db')

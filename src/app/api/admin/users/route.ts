@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 export async function GET() {
   try {
     let db: any
-    if (process.env.KV_REST_API_URL) {
+    if (process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL) {
       db = await import('@/lib/db-kv')
     } else {
       db = await import('@/lib/db')

@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
 
     let db: any
     try {
-      if (process.env.KV_REST_API_URL) {
+      if (process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL) {
         db = await import('@/lib/db-kv')
       } else {
         db = await import('@/lib/db')
