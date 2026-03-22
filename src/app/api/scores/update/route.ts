@@ -6,17 +6,17 @@ const IS_VERCEL = !!process.env.VERCEL;
 const SOURCE_DATA_DIR = path.join(process.cwd(), 'data');
 const DATA_DIR = IS_VERCEL ? '/tmp/golf-pool-data' : SOURCE_DATA_DIR;
 
-// Get path to scores JSON file
+const ESPN_API_URL = 'https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard';
+
 function getScoresPath(): string {
   return path.join(DATA_DIR, 'scores.json');
 }
 
-// Ensure data directory exists
 async function ensureDataDir() {
   try {
     await fs.mkdir(DATA_DIR, { recursive: true });
   } catch (err) {
-    // Directory already exists
+    // exists
   }
   if (IS_VERCEL) {
     const tmpPath = path.join(DATA_DIR, 'scores.json');
@@ -31,8 +31,7 @@ async function ensureDataDir() {
   }
 }
 
-// Read cached scores from JSON file
-async function readCachedScores(): Promise<any[]> {
+async function readCachedScores(): Promise<any> {
   try {
     await ensureDataDir();
     const filePath = getScoresPath();
@@ -40,15 +39,14 @@ async function readCachedScores(): Promise<any[]> {
     return JSON.parse(data);
   } catch (err: any) {
     if (err.code === 'ENOENT') {
-      return [];
+      return { players: [], tournament: null, lastUpdated: null };
     }
     console.error('Error reading cached scores:', err);
-    return [];
+    return { players: [], tournament: null, lastUpdated: null };
   }
 }
 
-// Write scores to JSON file
-async function writeScores(scores: any[]): Promise<void> {
+async function writeScores(scores: any): Promise<void> {
   try {
     await ensureDataDir();
     const filePath = getScoresPath();
@@ -59,74 +57,198 @@ async function writeScores(scores: any[]): Promise<void> {
   }
 }
 
-// Parse ESPN leaderboard HTML to extract scores
-function parseEspnLeaderboard(html: string): any[] {
-  const scores: any[] = [];
+// Parse ESPN JSON API response into our format
+function parseEspnApiResponse(data: any): any {
+  const result: any = {
+    players: [],
+    tournament: null,
+    lastUpdated: new Date().toISOString(),
+  };
 
   try {
-    const rowRegex = /<tr[^>]*>[\s\S]*?<\/tr>/g;
-    const rows = html.match(rowRegex) || [];
+    // Get the current/most recent event
+    const events = data?.events || [];
+    if (events.length === 0) {
+      console.log('No events found in ESPN API response');
+      return result;
+    }
 
-    for (const row of rows) {
-      const posMatch = row.match(/<td[^>]*>\s*(?:<[^>]*>)*(T?\d+|CUT|WD)(?:<[^>]*>)*\s*<\/td>/);
-      const nameMatch = row.match(/<a[^>]*href="\/golf\/player[^"]*"[^>]*>([^<]+)<\/a>/);
-      const scoreMatch = row.match(/>(-?\d+)<\/td>/);
+    const event = events[0];
+    result.tournament = {
+      name: event.name || event.shortName || 'Unknown Tournament',
+      status: event.status?.type?.description || 'Unknown',
+      startDate: event.date || null,
+      purse: null, // Will extract from competitions if available
+    };
 
-      if (nameMatch && scoreMatch) {
-        const name = nameMatch[1].trim();
-        const scoreStr = scoreMatch[1];
-        const score = parseInt(scoreStr, 10);
+    // Get competition data (the actual tournament)
+    const competitions = event.competitions || [];
+    if (competitions.length === 0) {
+      console.log('No competitions found in event');
+      return result;
+    }
 
-        scores.push({
-          name,
-          score,
-          pos: posMatch ? posMatch[1].trim() : 'T' + scores.length,
-          status: 'active',
+    const competition = competitions[0];
+
+    // Extract purse if available
+    if (competition.purse) {
+      result.tournament.purse = competition.purse;
+    }
+
+    // Extract competitor/player data
+    const competitors = competition.competitors || [];
+
+    for (const competitor of competitors) {
+      try {
+        const athlete = competitor.athlete || {};
+        const status = competitor.status || {};
+
+        // Get player name
+        const name = athlete.displayName || athlete.shortName || 'Unknown';
+
+        // Get position
+        const position = status.position?.displayName ||
+                         status.position?.id?.toString() ||
+                         competitor.place?.toString() ||
+                         '--';
+
+        // Get score to par - look in multiple places
+        let scoreToPar: number | null = null;
+        let scoreDisplay: string = 'E';
+
+        // Try competitor.score first
+        if (competitor.score !== undefined && competitor.score !== null) {
+          if (typeof competitor.score === 'object') {
+            scoreDisplay = competitor.score.displayValue || 'E';
+          } else {
+            scoreDisplay = competitor.score.toString();
+          }
+        }
+
+        // Try statistics array for scoreToPar
+        const stats = competitor.statistics || [];
+        for (const stat of stats) {
+          if (stat.name === 'scoreToPar' || stat.abbreviation === 'TOPAR') {
+            scoreDisplay = stat.displayValue || scoreDisplay;
+            break;
+          }
+        }
+
+        // Parse score display to number
+        if (scoreDisplay === 'E' || scoreDisplay === 'Even') {
+          scoreToPar = 0;
+        } else {
+          const parsed = parseInt(scoreDisplay, 10);
+          if (!isNaN(parsed)) {
+            scoreToPar = parsed;
+          }
+        }
+
+        // Get thru (holes completed)
+        const thru = status.thru?.toString() ||
+                     status.period?.toString() ||
+                     (status.type?.description === 'Final' ? 'F' : '--');
+
+        // Get round scores from linescores
+        const linescores = competitor.linescores || [];
+        const rounds: (number | null)[] = linescores.map((ls: any) => {
+          const val = ls.value !== undefined ? ls.value : ls.displayValue;
+          return val !== undefined && val !== null && val !== '--' ? Number(val) : null;
         });
+
+        // Determine status (active, cut, withdrawn)
+        let playerStatus = 'active';
+        const statusType = status.type?.description?.toLowerCase() || '';
+        const displayStatus = status.displayValue?.toLowerCase() || '';
+
+        if (statusType.includes('cut') || displayStatus.includes('cut') || position === 'CUT') {
+          playerStatus = 'cut';
+        } else if (statusType.includes('wd') || displayStatus.includes('wd') ||
+                   statusType.includes('withdraw') || position === 'WD') {
+          playerStatus = 'withdrawn';
+        } else if (statusType.includes('dq') || displayStatus.includes('dq') || position === 'DQ') {
+          playerStatus = 'disqualified';
+        }
+
+        // Get total strokes
+        let totalStrokes: number | null = null;
+        for (const stat of stats) {
+          if (stat.name === 'strokes' || stat.abbreviation === 'TOT') {
+            totalStrokes = Number(stat.displayValue) || null;
+            break;
+          }
+        }
+
+        result.players.push({
+          name,
+          pos: position,
+          score: scoreToPar,
+          scoreDisplay,
+          thru,
+          rounds,
+          totalStrokes,
+          status: playerStatus,
+          country: athlete.flag?.alt || null,
+        });
+      } catch (playerErr) {
+        console.error('Error parsing player:', playerErr);
+        // Skip this player but continue with others
       }
     }
+
+    // Sort by position (numerical positions first, then CUT/WD/DQ)
+    result.players.sort((a: any, b: any) => {
+      const posA = parseInt(a.pos.replace('T', ''), 10);
+      const posB = parseInt(b.pos.replace('T', ''), 10);
+      if (!isNaN(posA) && !isNaN(posB)) return posA - posB;
+      if (!isNaN(posA)) return -1;
+      if (!isNaN(posB)) return 1;
+      return 0;
+    });
+
   } catch (err) {
-    console.error('Error parsing ESPN leaderboard:', err);
+    console.error('Error parsing ESPN API response:', err);
   }
 
-  return scores;
+  return result;
 }
 
 export async function GET() {
   try {
-    // Attempt to fetch ESPN leaderboard
-    const response = await fetch('https://www.espn.com/golf/leaderboard', {
+    // Fetch from ESPN's public JSON API
+    const response = await fetch(ESPN_API_URL, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
       },
+      // Don't cache on the server side so we get fresh data
+      cache: 'no-store',
     });
 
     if (!response.ok) {
-      console.log('ESPN fetch failed, returning cached scores');
+      console.log(`ESPN API returned ${response.status}, returning cached scores`);
       const cachedScores = await readCachedScores();
       return Response.json(cachedScores);
     }
 
-    const html = await response.text();
+    const apiData = await response.json();
 
-    // Parse the HTML to extract scores
-    const scores = parseEspnLeaderboard(html);
+    // Parse the JSON response
+    const scores = parseEspnApiResponse(apiData);
 
-    // If parsing yielded no results, use cached scores
-    if (scores.length === 0) {
-      console.log('No scores parsed from ESPN, returning cached scores');
+    // Only save if we actually got player data
+    if (scores.players.length > 0) {
+      await writeScores(scores);
+
+      return Response.json(scores, {
+        headers: {
+          'Cache-Control': 'public, max-age=300', // Cache for 5 minutes
+        },
+      });
+    } else {
+      console.log('No players parsed from ESPN API, returning cached scores');
       const cachedScores = await readCachedScores();
       return Response.json(cachedScores);
     }
-
-    // Save updated scores to cache
-    await writeScores(scores);
-
-    return Response.json(scores, {
-      headers: {
-        'Cache-Control': 'public, max-age=300',
-      },
-    });
   } catch (err) {
     console.error('GET /api/scores/update error:', err);
 
@@ -138,7 +260,7 @@ export async function GET() {
         },
       });
     } catch (cacheErr) {
-      return Response.json([], { status: 500 });
+      return Response.json({ players: [], tournament: null, lastUpdated: null }, { status: 500 });
     }
   }
 }

@@ -630,6 +630,7 @@
                             <p class="timestamp mt-1">Total Purse: $20,000,000</p>
                         </div>
                     </div>
+                    <div id="tournamentInfoBar" style="margin-bottom:12px; padding:8px 12px; background:rgba(255,255,255,0.05); border-radius:8px; font-size:0.9rem; color:#e2e8f0;"></div>
                     <div class="flex gap-4 mb-4">
                         <input type="text" id="tournamentSearchInput" class="search-input flex-1" placeholder="Search golfer..." onkeyup="filterTournamentLeaderboard()">
                         <select id="tournamentFilterGroup" class="search-input" style="max-width:180px;" onchange="filterTournamentLeaderboard()">
@@ -2283,20 +2284,96 @@
             return '$' + amount.toLocaleString();
         }
 
+        let liveScoresLoaded = false;
+        let autoRefreshInterval = null;
+
         function renderTournamentLeaderboard() {
             const tbody = document.getElementById('tournamentLeaderboardBody');
             if (!tbody) return;
 
-            // Load scores from API if available
+            // Show loading state on first load
+            if (!liveScoresLoaded) {
+                tbody.innerHTML = '<tr><td colspan="12" style="text-align:center; padding:20px; color:#94a3b8;">Loading live scores...</td></tr>';
+            }
+
+            // Fetch live scores from API, then render
             fetch('/api/scores')
               .then(res => res.json())
               .then(data => {
-                if (data && Array.isArray(data) && data.length > 0) {
-                  tournamentScores.length = 0;
-                  tournamentScores.push(...data);
+                // Handle new format: { players: [...], tournament: {...}, lastUpdated: '...' }
+                let players = [];
+                let tournamentInfo = null;
+                let lastUpdated = null;
+
+                if (data && data.players && Array.isArray(data.players) && data.players.length > 0) {
+                    // New ESPN JSON API format
+                    players = data.players.map(p => ({
+                        pos: p.pos || '--',
+                        name: p.name,
+                        score: p.score,
+                        scoreDisplay: p.scoreDisplay || formatScoreToPar(p.score),
+                        today: p.today !== undefined ? p.today : null,
+                        thru: p.thru || '--',
+                        r1: p.rounds ? p.rounds[0] : (p.r1 || null),
+                        r2: p.rounds ? p.rounds[1] : (p.r2 || null),
+                        r3: p.rounds ? p.rounds[2] : (p.r3 || null),
+                        r4: p.rounds ? p.rounds[3] : (p.r4 || null),
+                        tot: p.totalStrokes || p.tot || null,
+                        status: p.status || 'active',
+                    }));
+                    tournamentInfo = data.tournament;
+                    lastUpdated = data.lastUpdated;
+                    // Update the main array for prize calculations
+                    tournamentScores.length = 0;
+                    tournamentScores.push(...players);
+                    liveScoresLoaded = true;
+                } else if (data && Array.isArray(data) && data.length > 0) {
+                    // Legacy flat array format
+                    tournamentScores.length = 0;
+                    tournamentScores.push(...data);
+                    liveScoresLoaded = true;
+                }
+                // If API returned nothing, keep existing hardcoded scores
+
+                doRenderLeaderboard(tournamentInfo, lastUpdated);
+
+                // Set up auto-refresh every 5 minutes if not already running
+                if (!autoRefreshInterval) {
+                    autoRefreshInterval = setInterval(() => {
+                        const activeTab = document.querySelector('.tab-btn.active');
+                        if (activeTab && activeTab.textContent.includes('Tournament')) {
+                            renderTournamentLeaderboard();
+                        }
+                    }, 5 * 60 * 1000);
                 }
               })
-              .catch(e => console.log('Scores API unavailable:', e));
+              .catch(e => {
+                console.log('Scores API unavailable, using cached data:', e);
+                doRenderLeaderboard(null, null);
+              });
+        }
+
+        function doRenderLeaderboard(tournamentInfo, lastUpdated) {
+            const tbody = document.getElementById('tournamentLeaderboardBody');
+            if (!tbody) return;
+
+            // Update tournament info header if available
+            const infoEl = document.getElementById('tournamentInfoBar');
+            if (infoEl) {
+                let infoHtml = '';
+                if (tournamentInfo) {
+                    infoHtml += `<span style="font-weight:600;">${tournamentInfo.name || ''}</span>`;
+                    if (tournamentInfo.status) infoHtml += ` &mdash; <span style="color:#c4a35a;">${tournamentInfo.status}</span>`;
+                }
+                if (lastUpdated) {
+                    const updated = new Date(lastUpdated);
+                    infoHtml += ` <span style="color:#64748b; font-size:0.8rem; margin-left:12px;">Last updated: ${updated.toLocaleTimeString()}</span>`;
+                }
+                if (liveScoresLoaded) {
+                    infoHtml += ' <span style="color:#22c55e; font-size:0.75rem; margin-left:8px;">&#9679; LIVE</span>';
+                }
+                infoEl.innerHTML = infoHtml;
+            }
 
             const prizeMap = calculateProjectedPrizes(tournamentScores);
 
@@ -2304,9 +2381,9 @@
             tournamentScores.forEach((p, idx) => {
                 const group = getGolferGroup(p.name);
                 const prize = prizeMap[p.name] || 0;
-                const isCut = p.status === 'cut' || p.status === 'wd';
-                const scoreStr = isCut ? (p.status === 'wd' ? 'WD' : 'CUT') : formatScoreToPar(p.score);
-                const todayStr = p.today !== null ? formatScoreToPar(p.today) : '-';
+                const isCut = p.status === 'cut' || p.status === 'wd' || p.status === 'withdrawn' || p.status === 'disqualified';
+                const scoreStr = isCut ? (p.status === 'wd' || p.status === 'withdrawn' ? 'WD' : p.status === 'disqualified' ? 'DQ' : 'CUT') : formatScoreToPar(p.score);
+                const todayStr = p.today !== null && p.today !== undefined ? formatScoreToPar(p.today) : '-';
                 const thruStr = p.thru === 'F' ? 'F' : (p.thru || '-');
 
                 const groupColor = group === 'A' ? '#c4a35a' : group === 'B' ? '#16a34a' : group === 'C' ? '#3b82f6' : group === 'D' ? '#a855f7' : '#64748b';
@@ -2322,7 +2399,7 @@
                     <td class="font-semibold">${p.name}</td>
                     <td><span style="background:${groupColor}22; color:${groupColor}; border:1px solid ${groupColor}55; padding:2px 8px; border-radius:4px; font-size:0.75rem; font-weight:600;">${groupLabel}</span></td>
                     <td class="font-bold" style="color:${p.score !== null && p.score < 0 ? '#ef4444' : p.score === 0 ? '#f8fafc' : '#22c55e'}">${scoreStr}</td>
-                    <td style="color:${p.today !== null && p.today < 0 ? '#ef4444' : p.today === 0 ? '#f8fafc' : '#22c55e'}">${todayStr}</td>
+                    <td style="color:${p.today !== null && p.today !== undefined && p.today < 0 ? '#ef4444' : p.today === 0 ? '#f8fafc' : '#22c55e'}">${todayStr}</td>
                     <td>${thruStr}</td>
                     <td>${p.r1 || '-'}</td>
                     <td>${p.r2 || '-'}</td>
