@@ -627,7 +627,7 @@
                         </div>
                         <div class="text-right">
                             <span id="tournament-round-status" class="status-badge status-in-progress">Round 3 - Complete</span>
-                            <p class="timestamp mt-1">Total Purse: $20,000,000</p>
+                            <p class="timestamp mt-1" id="purseDisplay">Total Purse: $9,100,000</p>
                         </div>
                     </div>
                     <div id="tournamentInfoBar" style="margin-bottom:12px; padding:8px 12px; background:rgba(255,255,255,0.05); border-radius:8px; font-size:0.9rem; color:#e2e8f0;"></div>
@@ -674,17 +674,17 @@
                 <div class="mb-6">
                     <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                         <div>
-                            <h2 class="text-3xl font-bold mb-2">2026 Valspar Championship Leaderboard</h2>
-                            <span class="status-badge status-in-progress">Round 2 - In Progress</span>
+                            <h2 class="text-3xl font-bold mb-2">Pool Standings</h2>
+                            <span class="status-badge status-setup">Loading...</span>
                         </div>
                         <div class="text-right">
-                            <p class="timestamp">Last updated: 2 min ago</p>
+                            <p class="timestamp" id="poolLastUpdated">Scores update every 5 minutes</p>
                             <div class="toggle-switch mt-2">
                                 <label class="switch">
-                                    <input type="checkbox" onchange="toggleAutoRefresh()">
+                                    <input type="checkbox" onchange="toggleAutoRefresh()" checked>
                                     <span class="slider"></span>
                                 </label>
-                                <span class="text-sm">Auto-refresh</span>
+                                <span class="text-sm">Auto-refresh (5 min)</span>
                             </div>
                         </div>
                     </div>
@@ -1463,26 +1463,14 @@
         document.addEventListener('DOMContentLoaded', () => {
             renderField();
             renderAdminGolfers();
+            // Preload live scores from ESPN on page load
+            loadLiveScores().then(() => {
+                console.log('Live scores loaded:', tournamentScores.length, 'players');
+            });
         });
 
-        // Mock Leaderboard Data — Valspar Championship
-        const leaderboardData = [
-            { rank: 1, name: "Mike Johnson", groupA: { golfer: "Xander Schauffele", amount: 2800 }, groupB: { golfer: "Sungjae Im", amount: 1200 }, groupC: { golfer: "Sahith Theegala", amount: 900 }, groupD: { golfer: "Lucas Glover", amount: 600 }, wc1: { golfer: "Ryo Hisatsune", amount: 1400 }, wc2: { golfer: "Corey Conners", amount: 1200 }, total: 8100, tb: -11, payout: 3123 },
-            { rank: 2, name: "Sarah Williams", groupA: { golfer: "Matt Fitzpatrick", amount: 2600 }, groupB: { golfer: "Brooks Koepka", amount: 1100 }, groupC: { golfer: "Billy Horschel", amount: 850 }, groupD: { golfer: "Charley Hoffman", amount: 550 }, wc1: { golfer: "Jordan Spieth", amount: 1300 }, wc2: { golfer: "Max Homa", amount: 1100 }, total: 7500, tb: -10, payout: 1562 },
-            { rank: 3, name: "David Chen", groupA: { golfer: "Viktor Hovland", amount: 2500 }, groupB: { golfer: "Patrick Cantlay", amount: 1300 }, groupC: { golfer: "Emiliano Grillo", amount: 950 }, groupD: { golfer: "Ryan Fox", amount: 700 }, wc1: { golfer: "Ben Griffin", amount: 1250 }, wc2: { golfer: "Nick Dunlap", amount: 1100 }, total: 7800, tb: -12, payout: 1041 },
-            { rank: 4, name: "Jessica Martinez", groupA: { golfer: "Jacob Bridgeman", amount: 2400 }, groupB: { golfer: "Justin Thomas", amount: 1150 }, groupC: { golfer: "Nicolai Højgaard", amount: 800 }, groupD: { golfer: "Adam Hadwin", amount: 600 }, wc1: { golfer: "Keegan Bradley", amount: 1200 }, wc2: { golfer: "J.J. Spaun", amount: 950 }, total: 7100, tb: -9, payout: 729 },
-            { rank: 5, name: "Robert Taylor", groupA: { golfer: "Xander Schauffele", amount: 2800 }, groupB: { golfer: "J.J. Spaun", amount: 1200 }, groupC: { golfer: "Max Homa", amount: 900 }, groupD: { golfer: "Garrick Higgo", amount: 650 }, wc1: { golfer: "Patrick Cantlay", amount: 1100 }, wc2: { golfer: "Sungjae Im", amount: 950 }, total: 7600, tb: -10, payout: 521 },
-            { rank: 6, name: "Jennifer Lee", groupA: { golfer: "Matt Fitzpatrick", amount: 2600 }, groupB: { golfer: "Ben Griffin", amount: 1050 }, groupC: { golfer: "Corey Conners", amount: 850 }, groupD: { golfer: "Lee Hodges", amount: 700 }, wc1: { golfer: "Jordan Spieth", amount: 1100 }, wc2: { golfer: "Billy Horschel", amount: 900 }, total: 7200, tb: -8, payout: 417 },
-            { rank: 7, name: "Mark Thompson", groupA: { golfer: "Viktor Hovland", amount: 2500 }, groupB: { golfer: "Keegan Bradley", amount: 1100 }, groupC: { golfer: "Sahith Theegala", amount: 950 }, groupD: { golfer: "Austin Eckroat", amount: 600 }, wc1: { golfer: "Justin Thomas", amount: 1300 }, wc2: { golfer: "Ryo Hisatsune", amount: 1050 }, total: 7500, tb: -11, payout: 312 },
-            { rank: 8, name: "Patricia Garcia", groupA: { golfer: "Xander Schauffele", amount: 2800 }, groupB: { golfer: "Jordan Spieth", amount: 1300 }, groupC: { golfer: "Nicolai Højgaard", amount: 850 }, groupD: { golfer: "Christiaan Bezuidenhout", amount: 550 }, wc1: { golfer: "Sungjae Im", amount: 1100 }, wc2: { golfer: "Max Homa", amount: 1050 }, total: 7650, tb: -13, payout: 208 },
-            { rank: 9, name: "Christopher Brown", groupA: { golfer: "Jacob Bridgeman", amount: 2400 }, groupB: { golfer: "Sungjae Im", amount: 1150 }, groupC: { golfer: "Billy Horschel", amount: 800 }, groupD: { golfer: "Lucas Glover", amount: 650 }, wc1: { golfer: "Brooks Koepka", amount: 1200 }, wc2: { golfer: "Emiliano Grillo", amount: 900 }, total: 7100, tb: -9, payout: 0 },
-            { rank: 10, name: "Nicole Rodriguez", groupA: { golfer: "Matt Fitzpatrick", amount: 2600 }, groupB: { golfer: "Patrick Cantlay", amount: 1200 }, groupC: { golfer: "Corey Conners", amount: 900 }, groupD: { golfer: "Charley Hoffman", amount: 700 }, wc1: { golfer: "Ben Griffin", amount: 1100 }, wc2: { golfer: "Nick Dunlap", amount: 900 }, total: 7400, tb: -10, payout: 0 },
-            { rank: 11, name: "James Wilson", groupA: { golfer: "Viktor Hovland", amount: 2500 }, groupB: { golfer: "Brooks Koepka", amount: 1100 }, groupC: { golfer: "Max Homa", amount: 850 }, groupD: { golfer: "Ryan Fox", amount: 600 }, wc1: { golfer: "Sahith Theegala", amount: 1300 }, wc2: { golfer: "Keegan Bradley", amount: 1050 }, total: 7400, tb: -8, payout: 0 },
-            { rank: 12, name: "Amanda White", groupA: { golfer: "Xander Schauffele", amount: 2800 }, groupB: { golfer: "Justin Thomas", amount: 1300 }, groupC: { golfer: "Emiliano Grillo", amount: 950 }, groupD: { golfer: "Adam Hadwin", amount: 550 }, wc1: { golfer: "Jordan Spieth", amount: 1100 }, wc2: { golfer: "Nicolai Højgaard", amount: 1100 }, total: 7800, tb: -14, payout: 0 },
-            { rank: 13, name: "Kevin Anderson", groupA: { golfer: "Jacob Bridgeman", amount: 2400 }, groupB: { golfer: "J.J. Spaun", amount: 1150 }, groupC: { golfer: "Ryo Hisatsune", amount: 850 }, groupD: { golfer: "Garrick Higgo", amount: 650 }, wc1: { golfer: "Patrick Cantlay", amount: 1200 }, wc2: { golfer: "Billy Horschel", amount: 1050 }, total: 7300, tb: -9, payout: 0 },
-            { rank: 14, name: "Lisa Davis", groupA: { golfer: "Matt Fitzpatrick", amount: 2600 }, groupB: { golfer: "Keegan Bradley", amount: 1200 }, groupC: { golfer: "Sahith Theegala", amount: 800 }, groupD: { golfer: "Lee Hodges", amount: 700 }, wc1: { golfer: "Sungjae Im", amount: 1100 }, wc2: { golfer: "Corey Conners", amount: 900 }, total: 7300, tb: -7, payout: 0 },
-            { rank: 15, name: "Steven Miller", groupA: { golfer: "Viktor Hovland", amount: 2500 }, groupB: { golfer: "Ben Griffin", amount: 1100 }, groupC: { golfer: "Nick Dunlap", amount: 900 }, groupD: { golfer: "Austin Eckroat", amount: 600 }, wc1: { golfer: "Justin Thomas", amount: 1300 }, wc2: { golfer: "Max Homa", amount: 1050 }, total: 7450, tb: -10, payout: 0 },
-        ];
+        // Pool leaderboard data — dynamically calculated from entries + live tournament scores
+        let leaderboardData = [];
 
         // Programmatic tab switch (for buttons outside the nav)
         function goToTab(tabName) {
@@ -1493,7 +1481,7 @@
                 if (b.getAttribute('onclick') === "switchTab('" + tabName + "')") b.classList.add('active');
             });
             if (tabName === 'tournament') renderTournamentLeaderboard();
-            if (tabName === 'leaderboard') populateLeaderboard(leaderboardData);
+            if (tabName === 'leaderboard') loadAndRenderPoolLeaderboard();
             if (tabName === 'home') renderField();
             if (tabName === 'admin') renderAdminGolfers();
             if (tabName === 'entry') renderEntryForm();
@@ -1522,7 +1510,7 @@
                 renderTournamentLeaderboard();
             }
             if (tabName === 'leaderboard') {
-                populateLeaderboard(leaderboardData);
+                loadAndRenderPoolLeaderboard();
             }
             if (tabName === 'home') {
                 renderField();
@@ -1560,48 +1548,257 @@
             event.target.style.borderColor = '#16a34a';
         }
 
-        // Populate Leaderboard
+        // =====================================================
+        // LIVE SCORES LOADER — single source of truth
+        // =====================================================
+        let liveScoresReady = false;
+        let livePrizeMap = {};
+
+        // Load live scores from API, update tournamentScores + prizeMap
+        // Returns a promise so callers can await it
+        function loadLiveScores() {
+            return fetch('/api/scores')
+              .then(res => res.json())
+              .then(data => {
+                let players = [];
+                if (data && data.players && Array.isArray(data.players) && data.players.length > 0) {
+                    players = data.players.map(p => ({
+                        pos: p.pos || '--',
+                        name: p.name,
+                        score: p.score,
+                        scoreDisplay: p.scoreDisplay || formatScoreToPar(p.score),
+                        today: p.today !== undefined ? p.today : null,
+                        thru: p.thru || '--',
+                        r1: p.rounds ? p.rounds[0] : (p.r1 || null),
+                        r2: p.rounds ? p.rounds[1] : (p.r2 || null),
+                        r3: p.rounds ? p.rounds[2] : (p.r3 || null),
+                        r4: p.rounds ? p.rounds[3] : (p.r4 || null),
+                        tot: p.totalStrokes || p.tot || null,
+                        status: p.status || 'active',
+                    }));
+                    tournamentScores.length = 0;
+                    tournamentScores.push(...players);
+                    liveScoresReady = true;
+
+                    // Update purse if API provides it
+                    if (data.tournament && data.tournament.purse) {
+                        TOTAL_PURSE = data.tournament.purse;
+                        const purseEl = document.getElementById('purseDisplay');
+                        if (purseEl) purseEl.textContent = 'Total Purse: $' + TOTAL_PURSE.toLocaleString();
+                    }
+                } else if (data && Array.isArray(data) && data.length > 0) {
+                    tournamentScores.length = 0;
+                    tournamentScores.push(...data);
+                    liveScoresReady = true;
+                }
+
+                // Recalculate prize map from latest scores
+                livePrizeMap = calculateProjectedPrizes(tournamentScores);
+
+                return { tournament: data?.tournament || null, lastUpdated: data?.lastUpdated || null };
+              })
+              .catch(e => {
+                console.log('Scores API unavailable:', e);
+                // Still calculate from whatever data we have (hardcoded fallback)
+                livePrizeMap = calculateProjectedPrizes(tournamentScores);
+                return { tournament: null, lastUpdated: null };
+              });
+        }
+
+        // =====================================================
+        // POOL LEADERBOARD — dynamic from entries + live scores
+        // =====================================================
+
+        // Payout structure: top 8 for <500 entries, top 9 for >=500
+        function getPayoutStructure(numEntries, entryFee) {
+            const totalPool = numEntries * entryFee;
+            const payoutPcts = numEntries >= 500
+              ? [0.30, 0.15, 0.10, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03] // top 9
+              : [0.30, 0.15, 0.10, 0.08, 0.07, 0.06, 0.05, 0.04];       // top 8
+            return payoutPcts.map((pct, i) => ({
+                place: i + 1,
+                amount: Math.round(totalPool * pct),
+            }));
+        }
+
+        // Look up a golfer name in the prize map (fuzzy match for slight name differences)
+        function getGolferPrize(golferName) {
+            if (!golferName) return 0;
+            // Exact match first
+            if (livePrizeMap[golferName] !== undefined) return livePrizeMap[golferName];
+            // Try case-insensitive
+            const lower = golferName.toLowerCase();
+            for (const [name, prize] of Object.entries(livePrizeMap)) {
+                if (name.toLowerCase() === lower) return prize;
+            }
+            // Try partial match (last name)
+            const parts = golferName.split(' ');
+            const lastName = parts[parts.length - 1].toLowerCase();
+            for (const [name, prize] of Object.entries(livePrizeMap)) {
+                if (name.toLowerCase().includes(lastName) && name.toLowerCase().includes(parts[0].toLowerCase())) return prize;
+            }
+            return 0;
+        }
+
+        // Find golfer name from ID using allGolfers list
+        function getGolferNameById(golferId) {
+            if (!golferId) return null;
+            // golferId might be a name already (from the entry form)
+            const g = allGolfers.find(g => g.name === golferId);
+            if (g) return g.name;
+            // Try matching by ID-like patterns
+            return golferId; // Return as-is (likely already a name)
+        }
+
+        // Build pool leaderboard from entries + live prize data
+        async function loadAndRenderPoolLeaderboard() {
+            const tbody = document.getElementById('leaderboardBody');
+            if (!tbody) return;
+
+            tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:20px; color:#94a3b8;">Loading pool standings...</td></tr>';
+
+            // Ensure live scores are loaded
+            if (!liveScoresReady) {
+                await loadLiveScores();
+            }
+
+            // Fetch entries from API
+            let entries = [];
+            try {
+                const res = await fetch('/api/entries');
+                if (res.ok) {
+                    entries = await res.json();
+                }
+            } catch (e) {
+                console.log('Could not load entries:', e);
+            }
+
+            if (entries.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:20px; color:#94a3b8;">No entries submitted yet. Be the first to enter!</td></tr>';
+                // Update header
+                const statusEl = document.querySelector('#leaderboard .status-badge');
+                if (statusEl) statusEl.textContent = '0 Entries';
+                return;
+            }
+
+            // Calculate standings for each entry
+            const standings = entries.map(entry => {
+                const pickA = entry.groupA || entry.pickGroupA || '';
+                const pickB = entry.groupB || entry.pickGroupB || '';
+                const pickC = entry.groupC || entry.pickGroupC || '';
+                const pickD = entry.groupD || entry.pickGroupD || '';
+                const wc1 = entry.wildCard1 || entry.wc1 || '';
+                const wc2 = entry.wildCard2 || entry.wc2 || '';
+
+                const prizeA = getGolferPrize(pickA);
+                const prizeB = getGolferPrize(pickB);
+                const prizeC = getGolferPrize(pickC);
+                const prizeD = getGolferPrize(pickD);
+                const prizeWC1 = getGolferPrize(wc1);
+                const prizeWC2 = getGolferPrize(wc2);
+
+                // Wild card earnings are DOUBLED
+                const total = prizeA + prizeB + prizeC + prizeD + (prizeWC1 * 2) + (prizeWC2 * 2);
+
+                return {
+                    name: entry.name || entry.entrantName || 'Unknown',
+                    groupA: { golfer: pickA, amount: prizeA },
+                    groupB: { golfer: pickB, amount: prizeB },
+                    groupC: { golfer: pickC, amount: prizeC },
+                    groupD: { golfer: pickD, amount: prizeD },
+                    wc1: { golfer: wc1, amount: prizeWC1 },
+                    wc2: { golfer: wc2, amount: prizeWC2 },
+                    total: total,
+                    tb: entry.tiebreaker !== undefined ? entry.tiebreaker : '--',
+                };
+            });
+
+            // Sort by total (descending), then tiebreaker (closest to winning score without going over)
+            // For now, sort by total descending; tiebreaker breaks ties
+            standings.sort((a, b) => {
+                if (b.total !== a.total) return b.total - a.total;
+                // Tiebreaker: closest without going over (Price is Right rules)
+                // Lower (more negative) tiebreaker = better if winning score is low
+                // For now, just sort by tiebreaker ascending (lower = better)
+                const tbA = typeof a.tb === 'number' ? a.tb : 999;
+                const tbB = typeof b.tb === 'number' ? b.tb : 999;
+                return tbA - tbB;
+            });
+
+            // Assign ranks
+            standings.forEach((s, i) => { s.rank = i + 1; });
+
+            // Calculate payouts
+            const entryFee = poolSettings.entryFee || 30;
+            const payouts = getPayoutStructure(entries.length, entryFee);
+            standings.forEach(s => {
+                const p = payouts.find(p => p.place === s.rank);
+                s.payout = p ? p.amount : 0;
+            });
+
+            // Store for filtering
+            leaderboardData = standings;
+
+            // Update header
+            const statusEl = document.querySelector('#leaderboard .status-badge');
+            if (statusEl) {
+                statusEl.textContent = entries.length + ' Entries — ' + (liveScoresReady ? 'Live Scores' : 'Pending Scores');
+                statusEl.className = 'status-badge ' + (liveScoresReady ? 'status-in-progress' : 'status-setup');
+            }
+
+            populateLeaderboard(standings);
+        }
+
+        // Render pool leaderboard table rows
         function populateLeaderboard(data) {
             const tbody = document.getElementById('leaderboardBody');
+            if (!tbody) return;
             tbody.innerHTML = '';
+
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:20px; color:#94a3b8;">No entries match your search.</td></tr>';
+                return;
+            }
 
             data.forEach((entry, index) => {
                 const rowClass = entry.rank === 1 ? 'rank-1' : (entry.rank <= 8 ? 'rank-2-8' : '');
                 const row = document.createElement('tr');
                 row.className = rowClass;
+                row.setAttribute('data-name', (entry.name || '').toLowerCase());
 
                 const rankBadgeClass = entry.rank === 1 ? 'rank-1-badge' : (entry.rank <= 3 ? 'rank-2-badge' : 'rank-3-badge');
+                const tbDisplay = typeof entry.tb === 'number' ? formatScoreToPar(entry.tb) : entry.tb;
 
                 row.innerHTML = `
                     <td><span class="rank-badge ${rankBadgeClass}">${entry.rank}</span></td>
                     <td>${entry.name}</td>
                     <td>
-                        <div class="text-sm font-semibold">${entry.groupA.golfer}</div>
-                        <div class="text-xs text-slate-400">$${entry.groupA.amount.toLocaleString()}</div>
+                        <div class="text-sm font-semibold">${entry.groupA.golfer || '—'}</div>
+                        <div class="text-xs text-slate-400">${formatPrizeMoney(entry.groupA.amount)}</div>
                     </td>
                     <td>
-                        <div class="text-sm font-semibold">${entry.groupB.golfer}</div>
-                        <div class="text-xs text-slate-400">$${entry.groupB.amount.toLocaleString()}</div>
+                        <div class="text-sm font-semibold">${entry.groupB.golfer || '—'}</div>
+                        <div class="text-xs text-slate-400">${formatPrizeMoney(entry.groupB.amount)}</div>
                     </td>
                     <td>
-                        <div class="text-sm font-semibold">${entry.groupC.golfer}</div>
-                        <div class="text-xs text-slate-400">$${entry.groupC.amount.toLocaleString()}</div>
+                        <div class="text-sm font-semibold">${entry.groupC.golfer || '—'}</div>
+                        <div class="text-xs text-slate-400">${formatPrizeMoney(entry.groupC.amount)}</div>
                     </td>
                     <td>
-                        <div class="text-sm font-semibold">${entry.groupD.golfer}</div>
-                        <div class="text-xs text-slate-400">$${entry.groupD.amount.toLocaleString()}</div>
+                        <div class="text-sm font-semibold">${entry.groupD.golfer || '—'}</div>
+                        <div class="text-xs text-slate-400">${formatPrizeMoney(entry.groupD.amount)}</div>
                     </td>
                     <td>
-                        <div class="text-sm font-semibold">${entry.wc1.golfer}</div>
-                        <div class="text-xs text-slate-400">$${entry.wc1.amount.toLocaleString()} <span class="gold-badge">2x</span></div>
+                        <div class="text-sm font-semibold">${entry.wc1.golfer || '—'}</div>
+                        <div class="text-xs text-slate-400">${formatPrizeMoney(entry.wc1.amount)} <span class="gold-badge">2x</span></div>
                     </td>
                     <td>
-                        <div class="text-sm font-semibold">${entry.wc2.golfer}</div>
-                        <div class="text-xs text-slate-400">$${entry.wc2.amount.toLocaleString()} <span class="gold-badge">2x</span></div>
+                        <div class="text-sm font-semibold">${entry.wc2.golfer || '—'}</div>
+                        <div class="text-xs text-slate-400">${formatPrizeMoney(entry.wc2.amount)} <span class="gold-badge">2x</span></div>
                     </td>
-                    <td class="payout-gold font-bold">$${entry.total.toLocaleString()}</td>
-                    <td>${entry.tb}</td>
-                    <td class="payout-gold font-bold">${entry.payout > 0 ? '$' + entry.payout.toLocaleString() : '—'}</td>
+                    <td class="payout-gold font-bold">${formatPrizeMoney(entry.total)}</td>
+                    <td>${tbDisplay}</td>
+                    <td class="payout-gold font-bold">${entry.payout > 0 ? formatPrizeMoney(entry.payout) : '—'}</td>
                 `;
 
                 tbody.appendChild(row);
@@ -1612,14 +1809,26 @@
         function filterLeaderboard() {
             const searchInput = document.getElementById('searchInput').value.toLowerCase();
             const filteredData = leaderboardData.filter(entry =>
-                entry.name.toLowerCase().includes(searchInput)
+                (entry.name || '').toLowerCase().includes(searchInput)
             );
             populateLeaderboard(filteredData);
         }
 
         // Toggle Auto-refresh
+        let poolAutoRefreshInterval = null;
         function toggleAutoRefresh() {
-            console.log('Auto-refresh toggled');
+            if (poolAutoRefreshInterval) {
+                clearInterval(poolAutoRefreshInterval);
+                poolAutoRefreshInterval = null;
+                console.log('Auto-refresh OFF');
+            } else {
+                poolAutoRefreshInterval = setInterval(async () => {
+                    await loadLiveScores();
+                    await loadAndRenderPoolLeaderboard();
+                    renderTournamentLeaderboard();
+                }, 5 * 60 * 1000); // every 5 minutes
+                console.log('Auto-refresh ON (every 5 min)');
+            }
         }
 
         // Scenario Generator
@@ -2022,9 +2231,9 @@
         // TOURNAMENT LEADERBOARD — Live scores + projected prize $
         // =====================================================
 
-        // 2026 Valspar Championship purse: $20,000,000
+        // 2026 Valspar Championship purse: $9,100,000
         // PGA Tour prize distribution (approximate % of purse for each position)
-        const TOTAL_PURSE = 20000000;
+        let TOTAL_PURSE = 9100000;
         const prizeDistribution = [
             0.18,    // 1st: $3,600,000
             0.109,   // 2nd
@@ -2284,80 +2493,21 @@
             return '$' + amount.toLocaleString();
         }
 
-        let liveScoresLoaded = false;
         let autoRefreshInterval = null;
 
-        function renderTournamentLeaderboard() {
+        async function renderTournamentLeaderboard() {
             const tbody = document.getElementById('tournamentLeaderboardBody');
             if (!tbody) return;
 
             // Show loading state on first load
-            if (!liveScoresLoaded) {
-                tbody.innerHTML = '<tr><td colspan="12" style="text-align:center; padding:20px; color:#94a3b8;">Loading live scores...</td></tr>';
+            if (!liveScoresReady) {
+                tbody.innerHTML = '<tr><td colspan="12" style="text-align:center; padding:20px; color:#94a3b8;">Loading live scores from ESPN...</td></tr>';
             }
 
-            // Fetch live scores from API, then render
-            fetch('/api/scores')
-              .then(res => res.json())
-              .then(data => {
-                // Handle new format: { players: [...], tournament: {...}, lastUpdated: '...' }
-                let players = [];
-                let tournamentInfo = null;
-                let lastUpdated = null;
+            // Load live scores (updates tournamentScores + livePrizeMap)
+            const { tournament: tournamentInfo, lastUpdated } = await loadLiveScores();
 
-                if (data && data.players && Array.isArray(data.players) && data.players.length > 0) {
-                    // New ESPN JSON API format
-                    players = data.players.map(p => ({
-                        pos: p.pos || '--',
-                        name: p.name,
-                        score: p.score,
-                        scoreDisplay: p.scoreDisplay || formatScoreToPar(p.score),
-                        today: p.today !== undefined ? p.today : null,
-                        thru: p.thru || '--',
-                        r1: p.rounds ? p.rounds[0] : (p.r1 || null),
-                        r2: p.rounds ? p.rounds[1] : (p.r2 || null),
-                        r3: p.rounds ? p.rounds[2] : (p.r3 || null),
-                        r4: p.rounds ? p.rounds[3] : (p.r4 || null),
-                        tot: p.totalStrokes || p.tot || null,
-                        status: p.status || 'active',
-                    }));
-                    tournamentInfo = data.tournament;
-                    lastUpdated = data.lastUpdated;
-                    // Update the main array for prize calculations
-                    tournamentScores.length = 0;
-                    tournamentScores.push(...players);
-                    liveScoresLoaded = true;
-                } else if (data && Array.isArray(data) && data.length > 0) {
-                    // Legacy flat array format
-                    tournamentScores.length = 0;
-                    tournamentScores.push(...data);
-                    liveScoresLoaded = true;
-                }
-                // If API returned nothing, keep existing hardcoded scores
-
-                doRenderLeaderboard(tournamentInfo, lastUpdated);
-
-                // Set up auto-refresh every 5 minutes if not already running
-                if (!autoRefreshInterval) {
-                    autoRefreshInterval = setInterval(() => {
-                        const activeTab = document.querySelector('.tab-btn.active');
-                        if (activeTab && activeTab.textContent.includes('Tournament')) {
-                            renderTournamentLeaderboard();
-                        }
-                    }, 5 * 60 * 1000);
-                }
-              })
-              .catch(e => {
-                console.log('Scores API unavailable, using cached data:', e);
-                doRenderLeaderboard(null, null);
-              });
-        }
-
-        function doRenderLeaderboard(tournamentInfo, lastUpdated) {
-            const tbody = document.getElementById('tournamentLeaderboardBody');
-            if (!tbody) return;
-
-            // Update tournament info header if available
+            // Render tournament info bar
             const infoEl = document.getElementById('tournamentInfoBar');
             if (infoEl) {
                 let infoHtml = '';
@@ -2369,18 +2519,17 @@
                     const updated = new Date(lastUpdated);
                     infoHtml += ` <span style="color:#64748b; font-size:0.8rem; margin-left:12px;">Last updated: ${updated.toLocaleTimeString()}</span>`;
                 }
-                if (liveScoresLoaded) {
+                if (liveScoresReady) {
                     infoHtml += ' <span style="color:#22c55e; font-size:0.75rem; margin-left:8px;">&#9679; LIVE</span>';
                 }
                 infoEl.innerHTML = infoHtml;
             }
 
-            const prizeMap = calculateProjectedPrizes(tournamentScores);
-
+            // Render the leaderboard rows
             let html = '';
             tournamentScores.forEach((p, idx) => {
                 const group = getGolferGroup(p.name);
-                const prize = prizeMap[p.name] || 0;
+                const prize = livePrizeMap[p.name] || 0;
                 const isCut = p.status === 'cut' || p.status === 'wd' || p.status === 'withdrawn' || p.status === 'disqualified';
                 const scoreStr = isCut ? (p.status === 'wd' || p.status === 'withdrawn' ? 'WD' : p.status === 'disqualified' ? 'DQ' : 'CUT') : formatScoreToPar(p.score);
                 const todayStr = p.today !== null && p.today !== undefined ? formatScoreToPar(p.today) : '-';
@@ -2410,6 +2559,18 @@
                 </tr>`;
             });
             tbody.innerHTML = html;
+
+            // Set up auto-refresh every 5 minutes if not already running
+            if (!autoRefreshInterval) {
+                autoRefreshInterval = setInterval(async () => {
+                    await loadLiveScores();
+                    renderTournamentLeaderboard();
+                    // Also refresh pool leaderboard if entries exist
+                    if (leaderboardData.length > 0) {
+                        loadAndRenderPoolLeaderboard();
+                    }
+                }, 5 * 60 * 1000);
+            }
         }
 
         function filterTournamentLeaderboard() {
