@@ -33,12 +33,49 @@ export interface PoolSettings {
   adminPassword: string
 }
 
-const DATA_DIR = path.join(process.cwd(), 'data')
+// On Vercel, the deployed file system is read-only. Use /tmp for writable storage.
+// Locally, use the data/ directory in the project root.
+const IS_VERCEL = !!process.env.VERCEL
+const SOURCE_DATA_DIR = path.join(process.cwd(), 'data')
+const DATA_DIR = IS_VERCEL ? '/tmp/golf-pool-data' : SOURCE_DATA_DIR
 
-// Ensure data directory exists
+const DEFAULT_FILES: { [key: string]: any } = {
+  'tournaments.json': [] as Tournament[],
+  'golfers.json': [] as Golfer[],
+  'tournament-golfers.json': [] as TournamentGolfer[],
+  'entries.json': [] as Entry[],
+  'users.json': [] as User[],
+  'sessions.json': [] as Session[],
+  'settings.json': {
+    submissionDeadline: '2026-03-19T07:00:00Z',
+    entryFee: 30,
+    tournamentName: '2026 Valspar Championship',
+    teamStakeUrl: '',
+    poolPassword: 'golf2026',
+    adminUsername: 'admin',
+    adminPassword: 'golfpool2026',
+  } as PoolSettings,
+}
+
+// Ensure data directory exists and seed with defaults or copy from source
 function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true })
+  }
+  // On Vercel, copy source data files to /tmp if they don't exist yet
+  if (IS_VERCEL) {
+    for (const [filename, defaultData] of Object.entries(DEFAULT_FILES)) {
+      const tmpPath = path.join(DATA_DIR, filename)
+      if (!fs.existsSync(tmpPath)) {
+        // Try to copy from the deployed data/ folder first (has our seed data)
+        const sourcePath = path.join(SOURCE_DATA_DIR, filename)
+        if (fs.existsSync(sourcePath)) {
+          fs.copyFileSync(sourcePath, tmpPath)
+        } else {
+          fs.writeFileSync(tmpPath, JSON.stringify(defaultData, null, 2))
+        }
+      }
+    }
   }
 }
 
@@ -46,25 +83,7 @@ function ensureDataDir() {
 export function initDB() {
   ensureDataDir()
 
-  const files: { [key: string]: any } = {
-    'tournaments.json': [] as Tournament[],
-    'golfers.json': [] as Golfer[],
-    'tournament-golfers.json': [] as TournamentGolfer[],
-    'entries.json': [] as Entry[],
-    'users.json': [] as User[],
-    'sessions.json': [] as Session[],
-    'settings.json': {
-      submissionDeadline: '2026-03-19T07:00:00Z',
-      entryFee: 30,
-      tournamentName: '2026 Valspar Championship',
-      teamStakeUrl: '',
-      poolPassword: 'golf2026',
-      adminUsername: 'admin',
-      adminPassword: 'golfpool2026',
-    } as PoolSettings,
-  }
-
-  for (const [filename, defaultData] of Object.entries(files)) {
+  for (const [filename, defaultData] of Object.entries(DEFAULT_FILES)) {
     const filepath = path.join(DATA_DIR, filename)
     if (!fs.existsSync(filepath)) {
       fs.writeFileSync(filepath, JSON.stringify(defaultData, null, 2))

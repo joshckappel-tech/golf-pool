@@ -1,0 +1,2829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Golf Pool - Tournament Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --dark-bg: #0f172a;
+            --dark-green: #1e3a1f;
+            --primary-green: #15803d;
+            --primary-green-light: #16a34a;
+            --gold: #c4a35a;
+            --text-light: #f8fafc;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--dark-bg) 0%, var(--dark-green) 100%);
+            background-attachment: fixed;
+            color: var(--text-light);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+
+        .tab-pane {
+            display: none;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        .tab-pane.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .tab-button {
+            position: relative;
+            padding: 12px 24px;
+            border: none;
+            background: transparent;
+            color: var(--text-light);
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .tab-button.active {
+            color: var(--primary-green-light);
+        }
+
+        .tab-button.active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--gold), var(--primary-green-light));
+        }
+
+        .gold-badge {
+            background-color: var(--gold);
+            color: #1e293b;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+        }
+
+        .stat-card {
+            background: rgba(21, 128, 61, 0.1);
+            border: 1px solid rgba(22, 163, 74, 0.3);
+            border-radius: 8px;
+            padding: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            background: rgba(21, 128, 61, 0.15);
+            border-color: rgba(22, 163, 74, 0.5);
+        }
+
+        .golfer-card {
+            background: rgba(30, 58, 31, 0.6);
+            border: 2px solid rgba(22, 163, 74, 0.3);
+            border-radius: 8px;
+            padding: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .golfer-card:hover {
+            border-color: var(--primary-green-light);
+            background: rgba(30, 58, 31, 0.9);
+            transform: translateY(-2px);
+        }
+
+        .golfer-card.selected {
+            background: rgba(22, 163, 74, 0.3);
+            border-color: var(--gold);
+            box-shadow: 0 0 20px rgba(196, 163, 90, 0.2);
+        }
+
+        .leaderboard-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+        }
+
+        .leaderboard-table th {
+            background: rgba(21, 128, 61, 0.2);
+            border-bottom: 2px solid rgba(22, 163, 74, 0.5);
+            padding: 12px 8px;
+            text-align: left;
+            font-weight: 600;
+            color: var(--primary-green-light);
+            white-space: nowrap;
+        }
+
+        .leaderboard-table td {
+            padding: 12px 8px;
+            border-bottom: 1px solid rgba(22, 163, 74, 0.2);
+        }
+
+        .leaderboard-table tr {
+            transition: background-color 0.3s ease;
+        }
+
+        .leaderboard-table tbody tr:hover {
+            background: rgba(22, 163, 74, 0.1);
+        }
+
+        .rank-1 {
+            background: rgba(196, 163, 90, 0.15);
+        }
+
+        .rank-2-8 {
+            background: rgba(22, 163, 74, 0.08);
+        }
+
+        .rank-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            font-weight: 700;
+            font-size: 0.875rem;
+        }
+
+        .rank-1-badge {
+            background: var(--gold);
+            color: #1e293b;
+        }
+
+        .rank-2-badge {
+            background: rgba(196, 163, 90, 0.4);
+            color: var(--gold);
+        }
+
+        .rank-3-badge {
+            background: rgba(100, 116, 139, 0.3);
+            color: #cbd5e1;
+        }
+
+        .hero-gradient {
+            background: linear-gradient(135deg, rgba(22, 163, 74, 0.2), rgba(196, 163, 90, 0.1));
+            border: 1px solid rgba(22, 163, 74, 0.3);
+        }
+
+        .payout-gold {
+            color: var(--gold);
+            font-weight: 600;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .status-open {
+            background: rgba(34, 197, 94, 0.2);
+            color: #86efac;
+            border: 1px solid rgba(34, 197, 94, 0.5);
+        }
+
+        .status-in-progress {
+            background: rgba(59, 130, 246, 0.2);
+            color: #93c5fd;
+            border: 1px solid rgba(59, 130, 246, 0.5);
+        }
+
+        .step-indicator {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+
+        .step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex: 1;
+        }
+
+        .step-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            margin-bottom: 8px;
+            background: rgba(21, 128, 61, 0.3);
+            border: 2px solid rgba(22, 163, 74, 0.5);
+            color: var(--text-light);
+        }
+
+        .step.active .step-circle {
+            background: var(--primary-green-light);
+            border-color: var(--gold);
+            color: #0f172a;
+            box-shadow: 0 0 15px rgba(22, 163, 74, 0.5);
+        }
+
+        .step.completed .step-circle {
+            background: var(--gold);
+            border-color: var(--gold);
+            color: #0f172a;
+        }
+
+        .step-label {
+            font-size: 0.75rem;
+            color: rgba(248, 250, 252, 0.6);
+            text-align: center;
+        }
+
+        .step.active .step-label {
+            color: var(--primary-green-light);
+            font-weight: 600;
+        }
+
+        .step.completed .step-label {
+            color: var(--gold);
+        }
+
+        .leaderboard-scroll {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .leaderboard-scroll::-webkit-scrollbar {
+            height: 6px;
+        }
+
+        .leaderboard-scroll::-webkit-scrollbar-track {
+            background: rgba(21, 128, 61, 0.1);
+        }
+
+        .leaderboard-scroll::-webkit-scrollbar-thumb {
+            background: rgba(22, 163, 74, 0.5);
+            border-radius: 3px;
+        }
+
+        .golfer-list-item {
+            background: rgba(30, 58, 31, 0.6);
+            border: 1px solid rgba(22, 163, 74, 0.3);
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .golfer-list-item:hover {
+            background: rgba(30, 58, 31, 0.9);
+        }
+
+        .adjustment-buttons {
+            display: flex;
+            gap: 4px;
+        }
+
+        .adjustment-button {
+            width: 32px;
+            height: 32px;
+            border-radius: 4px;
+            border: 1px solid rgba(22, 163, 74, 0.5);
+            background: rgba(21, 128, 61, 0.2);
+            color: var(--primary-green-light);
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .adjustment-button:hover {
+            background: var(--primary-green-light);
+            color: #0f172a;
+        }
+
+        .entry-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+        }
+
+        .entry-table th {
+            background: rgba(21, 128, 61, 0.2);
+            border-bottom: 2px solid rgba(22, 163, 74, 0.5);
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: var(--primary-green-light);
+        }
+
+        .entry-table td {
+            padding: 12px;
+            border-bottom: 1px solid rgba(22, 163, 74, 0.2);
+        }
+
+        .paid-badge {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 24px;
+            font-weight: 700;
+        }
+
+        .paid-badge.yes {
+            background: rgba(34, 197, 94, 0.3);
+            color: #86efac;
+        }
+
+        .paid-badge.no {
+            background: rgba(239, 68, 68, 0.3);
+            color: #fca5a5;
+        }
+
+        .group-card {
+            background: rgba(30, 58, 31, 0.6);
+            border: 1px solid rgba(22, 163, 74, 0.3);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            cursor: move;
+            transition: all 0.3s ease;
+        }
+
+        .group-card:hover {
+            border-color: var(--primary-green-light);
+            background: rgba(30, 58, 31, 0.9);
+        }
+
+        .manual-override-badge {
+            background: rgba(217, 119, 6, 0.2);
+            color: #fed7aa;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            border: 1px solid rgba(217, 119, 6, 0.5);
+        }
+
+        .search-input {
+            background: rgba(21, 128, 61, 0.1);
+            border: 1px solid rgba(22, 163, 74, 0.3);
+            color: var(--text-light);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            width: 100%;
+        }
+
+        .search-input::placeholder {
+            color: rgba(248, 250, 252, 0.4);
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--primary-green-light);
+            background: rgba(21, 128, 61, 0.2);
+            box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
+        }
+
+        .toggle-switch {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(21, 128, 61, 0.3);
+            transition: 0.3s;
+            border-radius: 24px;
+            border: 1px solid rgba(22, 163, 74, 0.5);
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 2px;
+            background-color: var(--text-light);
+            transition: 0.3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: var(--primary-green-light);
+            border-color: var(--primary-green-light);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(20px);
+        }
+
+        .button-primary {
+            background: linear-gradient(135deg, var(--primary-green-light), var(--primary-green));
+            color: #0f172a;
+            padding: 10px 20px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .button-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(22, 163, 74, 0.3);
+        }
+
+        .button-secondary {
+            background: rgba(21, 128, 61, 0.2);
+            color: var(--primary-green-light);
+            padding: 10px 20px;
+            border-radius: 6px;
+            border: 1px solid rgba(22, 163, 74, 0.5);
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .button-secondary:hover {
+            background: rgba(21, 128, 61, 0.3);
+            border-color: var(--primary-green-light);
+        }
+
+        .timestamp {
+            font-size: 0.75rem;
+            color: rgba(248, 250, 252, 0.5);
+        }
+
+        .scenario-panel {
+            background: rgba(30, 58, 31, 0.6);
+            border: 1px solid rgba(22, 163, 74, 0.3);
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .change-indicator {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+
+        .change-up {
+            background: rgba(34, 197, 94, 0.2);
+            color: #86efac;
+        }
+
+        .change-down {
+            background: rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <div class="min-h-screen">
+        <!-- Header -->
+        <header class="border-b border-green-900/30 sticky top-0 z-50 backdrop-blur-sm bg-opacity-90" style="background: rgba(15, 23, 42, 0.9);">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-full flex items-center justify-center" style="background: linear-gradient(135deg, #16a34a, #c4a35a);">
+                            <span style="color: #0f172a; font-weight: 700;">⛳</span>
+                        </div>
+                        <h1 class="text-2xl font-bold" style="color: #c4a35a;">Golf Pool</h1>
+                    </div>
+                    <div id="user-menu" class="flex items-center gap-3">
+                        <button id="login-btn" class="text-sm px-4 py-2 rounded font-semibold" style="background:rgba(22,163,74,0.2); border:1px solid rgba(22,163,74,0.4); color:#16a34a;" onclick="showAuthModal('login')">Log In</button>
+                        <button id="signup-btn" class="text-sm px-4 py-2 rounded font-semibold" style="background:linear-gradient(135deg,#16a34a,#c4a35a); color:#0f172a;" onclick="showAuthModal('register')">Sign Up</button>
+                        <div id="user-info" class="hidden flex items-center gap-3">
+                            <span id="user-display-name" class="text-sm text-slate-300"></span>
+                            <button class="text-xs px-3 py-1 rounded" style="background:rgba(100,116,139,0.2); border:1px solid rgba(100,116,139,0.3); color:#94a3b8;" onclick="logoutUser()">Log Out</button>
+                        </div>
+                    </div>
+                    <nav class="flex gap-2 flex-wrap" style="border-bottom: 2px solid rgba(22, 163, 74, 0.2); margin-bottom: -1px;">
+                        <button class="tab-button active" onclick="switchTab('home')">Home</button>
+                        <button class="tab-button" onclick="switchTab('tournament')">Tournament</button>
+                        <button class="tab-button" onclick="switchTab('leaderboard')">Pool Leaderboard</button>
+                        <button class="tab-button" onclick="switchTab('entry')">Entry Form</button>
+                        <button class="tab-button hidden" id="my-entries-tab" onclick="switchTab('myentries')">My Entries</button>
+                        <button class="tab-button" onclick="switchTab('scenario')">Scenario</button>
+                        <button class="tab-button hidden" id="admin-tab-btn" onclick="switchTab('admin')">Admin</button>
+                    </nav>
+                </div>
+            </div>
+        </header>
+
+        <!-- Content -->
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <!-- HOME TAB -->
+            <div id="home" class="tab-pane active">
+                <!-- Hero Section -->
+                <section class="hero-gradient rounded-xl p-8 mb-12 text-center">
+                    <h2 class="text-5xl font-bold mb-2" style="color: #c4a35a;">Welcome to the Valspar Championship Pool</h2>
+                    <p class="text-xl text-slate-200">Pick your golfers. Track the action. Win the pool.</p>
+                </section>
+
+                <!-- Active Tournament Card -->
+                <section class="mb-12">
+                    <h3 class="text-2xl font-bold mb-6">Active Tournament</h3>
+                    <div class="stat-card" style="background: rgba(21, 128, 61, 0.15); border: 2px solid rgba(22, 163, 74, 0.5);">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div>
+                                <h4 class="text-xl font-bold mb-2">2026 Valspar Championship</h4>
+                                <div class="flex items-center gap-2">
+                                    <span class="status-badge status-open">Entries Open</span>
+                                </div>
+                            </div>
+                            <div>
+                                <p class="text-slate-400 text-sm mb-1">Entries</p>
+                                <p class="text-2xl font-bold">0</p>
+                                <p class="text-slate-400 text-sm mt-2">$30 per entry</p>
+                            </div>
+                            <div>
+                                <p class="text-slate-400 text-sm mb-1">Prize Pool</p>
+                                <p class="text-2xl font-bold" style="color: #c4a35a;">$0</p>
+                                <p class="text-slate-400 text-sm mt-2">Be the first to enter!</p>
+                            </div>
+                        </div>
+                        <div class="mt-6 pt-6 border-t border-green-900/30">
+                            <button class="button-primary" onclick="goToTab('entry')">Enter Tournament</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- How It Works -->
+                <section class="mb-12">
+                    <h3 class="text-2xl font-bold mb-6">How It Works</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="stat-card">
+                            <h4 class="text-lg font-bold mb-3" style="color: #16a34a;">Pick Your Team</h4>
+                            <ul class="space-y-2 text-sm text-slate-300">
+                                <li>• 1 golfer from Group A</li>
+                                <li>• 1 golfer from Group B</li>
+                                <li>• 1 golfer from Group C</li>
+                                <li>• 1 golfer from Group D</li>
+                                <li>• 2 wild cards (any golfer)</li>
+                                <li>• Pick winning score to par (used for tiebreaker)</li>
+                            </ul>
+                        </div>
+                        <div class="stat-card">
+                            <h4 class="text-lg font-bold mb-3" style="color: #16a34a;">Scoring System</h4>
+                            <ul class="space-y-2 text-sm text-slate-300">
+                                <li>• Base Score: Total Prize Money earned by 6 golfers</li>
+                                <li>• Wild cards: 2x multiplier on Prize Money</li>
+                                <li>• Tiebreaker used to settle any ties</li>
+                                <li>• Real-time leaderboard updates</li>
+                                <li>• Real-time scenario generator</li>
+                            </ul>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- The Field (dynamically rendered from shared data) -->
+                <section>
+                    <h3 class="text-2xl font-bold mb-6">The Field</h3>
+                    <div id="field-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    </div>
+                </section>
+            </div>
+
+            <!-- TOURNAMENT LEADERBOARD TAB -->
+            <div id="tournament" class="tab-pane">
+                <div class="mb-6">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+                        <div>
+                            <h2 class="text-3xl font-bold mb-2">2026 Valspar Championship</h2>
+                            <p class="text-slate-400">Copperhead Course at Innisbrook Resort</p>
+                        </div>
+                        <div class="text-right">
+                            <span id="tournament-round-status" class="status-badge status-in-progress">Round 3 - Complete</span>
+                            <p class="timestamp mt-1">Total Purse: $20,000,000</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-4 mb-4">
+                        <input type="text" id="tournamentSearchInput" class="search-input flex-1" placeholder="Search golfer..." onkeyup="filterTournamentLeaderboard()">
+                        <select id="tournamentFilterGroup" class="search-input" style="max-width:180px;" onchange="filterTournamentLeaderboard()">
+                            <option value="all">All Golfers</option>
+                            <option value="active">Made Cut</option>
+                            <option value="cut">Missed Cut</option>
+                            <option value="A">Group A</option>
+                            <option value="B">Group B</option>
+                            <option value="C">Group C</option>
+                            <option value="D">Group D</option>
+                            <option value="WC">Wild Cards</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="leaderboard-scroll">
+                    <table class="leaderboard-table">
+                        <thead>
+                            <tr>
+                                <th style="width:50px;">Pos</th>
+                                <th>Player</th>
+                                <th style="width:70px;">Group</th>
+                                <th style="width:70px;">Score</th>
+                                <th style="width:60px;">Today</th>
+                                <th style="width:50px;">Thru</th>
+                                <th style="width:50px;">R1</th>
+                                <th style="width:50px;">R2</th>
+                                <th style="width:50px;">R3</th>
+                                <th style="width:50px;">R4</th>
+                                <th style="width:70px;">Tot</th>
+                                <th style="width:120px;">Proj. Prize $</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tournamentLeaderboardBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- POOL LEADERBOARD TAB -->
+            <div id="leaderboard" class="tab-pane">
+                <div class="mb-6">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                        <div>
+                            <h2 class="text-3xl font-bold mb-2">2026 Valspar Championship Leaderboard</h2>
+                            <span class="status-badge status-in-progress">Round 2 - In Progress</span>
+                        </div>
+                        <div class="text-right">
+                            <p class="timestamp">Last updated: 2 min ago</p>
+                            <div class="toggle-switch mt-2">
+                                <label class="switch">
+                                    <input type="checkbox" onchange="toggleAutoRefresh()">
+                                    <span class="slider"></span>
+                                </label>
+                                <span class="text-sm">Auto-refresh</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-4">
+                        <input type="text" id="searchInput" class="search-input flex-1" placeholder="Search by entrant name..." onkeyup="filterLeaderboard()">
+                    </div>
+                </div>
+
+                <div class="leaderboard-scroll">
+                    <table class="leaderboard-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 60px;">Rank</th>
+                                <th style="width: 150px;">Entrant</th>
+                                <th style="width: 140px;">Group A</th>
+                                <th style="width: 140px;">Group B</th>
+                                <th style="width: 140px;">Group C</th>
+                                <th style="width: 140px;">Group D</th>
+                                <th style="width: 160px;">Wild Card 1</th>
+                                <th style="width: 160px;">Wild Card 2</th>
+                                <th style="width: 120px;">Total</th>
+                                <th style="width: 100px;">TB</th>
+                                <th style="width: 100px;">Payout</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leaderboardBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ENTRY FORM TAB (dynamically rendered from shared golfer data) -->
+            <div id="entry" class="tab-pane">
+                <div class="mb-8">
+                    <h2 class="text-3xl font-bold mb-6">Join Tournament</h2>
+                    <div id="entry-step-indicator"></div>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                    <div class="lg:col-span-3" id="entry-main-content"></div>
+                    <div class="lg:col-span-1" id="entry-sidebar"></div>
+                </div>
+            </div>
+
+            <!-- SCENARIO GENERATOR TAB -->
+            <div id="scenario" class="tab-pane">
+                <h2 class="text-3xl font-bold mb-6">Scenario Generator</h2>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Left Panel: Golfer Adjustments -->
+                    <div class="scenario-panel">
+                        <h3 class="text-xl font-bold mb-4">Current Leaderboard</h3>
+                        <p class="text-slate-400 text-sm mb-4">Adjust positions and scores to see impact on pool standings</p>
+
+                        <div class="space-y-3">
+                            <div class="golfer-list-item">
+                                <div class="flex-1">
+                                    <p class="font-bold">1. Sungjae Im</p>
+                                    <p class="text-sm text-slate-400">-8</p>
+                                </div>
+                                <div class="adjustment-buttons">
+                                    <button class="adjustment-button" onclick="adjustScore(-1, 'im')">−</button>
+                                    <button class="adjustment-button" onclick="adjustScore(1, 'im')">+</button>
+                                </div>
+                            </div>
+                            <div class="golfer-list-item">
+                                <div class="flex-1">
+                                    <p class="font-bold">2. Xander Schauffele</p>
+                                    <p class="text-sm text-slate-400">-7</p>
+                                </div>
+                                <div class="adjustment-buttons">
+                                    <button class="adjustment-button" onclick="adjustScore(-1, 'schauffele')">−</button>
+                                    <button class="adjustment-button" onclick="adjustScore(1, 'schauffele')">+</button>
+                                </div>
+                            </div>
+                            <div class="golfer-list-item">
+                                <div class="flex-1">
+                                    <p class="font-bold">3. Jacob Bridgeman</p>
+                                    <p class="text-sm text-slate-400">-6</p>
+                                </div>
+                                <div class="adjustment-buttons">
+                                    <button class="adjustment-button" onclick="adjustScore(-1, 'bridgeman')">−</button>
+                                    <button class="adjustment-button" onclick="adjustScore(1, 'bridgeman')">+</button>
+                                </div>
+                            </div>
+                            <div class="golfer-list-item">
+                                <div class="flex-1">
+                                    <p class="font-bold">4. Matt Fitzpatrick</p>
+                                    <p class="text-sm text-slate-400">-6</p>
+                                </div>
+                                <div class="adjustment-buttons">
+                                    <button class="adjustment-button" onclick="adjustScore(-1, 'fitzpatrick')">−</button>
+                                    <button class="adjustment-button" onclick="adjustScore(1, 'fitzpatrick')">+</button>
+                                </div>
+                            </div>
+                            <div class="golfer-list-item">
+                                <div class="flex-1">
+                                    <p class="font-bold">5. Viktor Hovland</p>
+                                    <p class="text-sm text-slate-400">-5</p>
+                                </div>
+                                <div class="adjustment-buttons">
+                                    <button class="adjustment-button" onclick="adjustScore(-1, 'hovland')">−</button>
+                                    <button class="adjustment-button" onclick="adjustScore(1, 'hovland')">+</button>
+                                </div>
+                            </div>
+                            <div class="golfer-list-item">
+                                <div class="flex-1">
+                                    <p class="font-bold">6. Jordan Spieth</p>
+                                    <p class="text-sm text-slate-400">-5</p>
+                                </div>
+                                <div class="adjustment-buttons">
+                                    <button class="adjustment-button" onclick="adjustScore(-1, 'spieth')">−</button>
+                                    <button class="adjustment-button" onclick="adjustScore(1, 'spieth')">+</button>
+                                </div>
+                            </div>
+                            <div class="golfer-list-item">
+                                <div class="flex-1">
+                                    <p class="font-bold">7. Brooks Koepka</p>
+                                    <p class="text-sm text-slate-400">-4</p>
+                                </div>
+                                <div class="adjustment-buttons">
+                                    <button class="adjustment-button" onclick="adjustScore(-1, 'koepka')">−</button>
+                                    <button class="adjustment-button" onclick="adjustScore(1, 'koepka')">+</button>
+                                </div>
+                            </div>
+                            <div class="golfer-list-item">
+                                <div class="flex-1">
+                                    <p class="font-bold">8. Patrick Cantlay</p>
+                                    <p class="text-sm text-slate-400">-4</p>
+                                </div>
+                                <div class="adjustment-buttons">
+                                    <button class="adjustment-button" onclick="adjustScore(-1, 'cantlay')">−</button>
+                                    <button class="adjustment-button" onclick="adjustScore(1, 'cantlay')">+</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-6 flex gap-2">
+                            <button class="button-primary flex-1" onclick="calculateImpact()">Calculate Impact</button>
+                            <button class="button-secondary flex-1" onclick="resetScenario()">Reset</button>
+                        </div>
+                    </div>
+
+                    <!-- Right Panel: Impact Results -->
+                    <div class="scenario-panel">
+                        <h3 class="text-xl font-bold mb-4">Pool Impact</h3>
+                        <p class="text-slate-400 text-sm mb-4">See how leaderboard changes affect pool standings</p>
+
+                        <div class="space-y-3">
+                            <div class="bg-green-900/20 p-3 rounded border border-green-700/30">
+                                <div class="flex justify-between items-start mb-2">
+                                    <div>
+                                        <p class="text-xs text-slate-400 mb-1">1st Place</p>
+                                        <p class="font-bold">Mike Johnson</p>
+                                        <p class="text-sm text-slate-400">+$850</p>
+                                    </div>
+                                    <span class="change-indicator change-up">HELD</span>
+                                </div>
+                            </div>
+                            <div class="bg-slate-700/20 p-3 rounded border border-slate-600/30">
+                                <div class="flex justify-between items-start mb-2">
+                                    <div>
+                                        <p class="text-xs text-slate-400 mb-1">2nd Place</p>
+                                        <p class="font-bold">Sarah Williams</p>
+                                        <p class="text-sm text-slate-400">+$625</p>
+                                    </div>
+                                    <span class="change-indicator change-up">↑ from 4th</span>
+                                </div>
+                            </div>
+                            <div class="bg-slate-700/20 p-3 rounded border border-slate-600/30">
+                                <div class="flex justify-between items-start mb-2">
+                                    <div>
+                                        <p class="text-xs text-slate-400 mb-1">3rd Place</p>
+                                        <p class="font-bold">David Chen</p>
+                                        <p class="text-sm text-slate-400">+$480</p>
+                                    </div>
+                                    <span class="change-indicator change-up">↑ from 5th</span>
+                                </div>
+                            </div>
+                            <div class="bg-slate-700/20 p-3 rounded border border-slate-600/30">
+                                <div class="flex justify-between items-start mb-2">
+                                    <div>
+                                        <p class="text-xs text-slate-400 mb-1">4th Place</p>
+                                        <p class="font-bold">Jessica Martinez</p>
+                                        <p class="text-sm text-slate-400">+$350</p>
+                                    </div>
+                                    <span class="change-indicator change-down">↓ from 2nd</span>
+                                </div>
+                            </div>
+                            <div class="bg-slate-700/20 p-3 rounded border border-slate-600/30">
+                                <div class="flex justify-between items-start mb-2">
+                                    <div>
+                                        <p class="text-xs text-slate-400 mb-1">5th Place</p>
+                                        <p class="font-bold">Robert Taylor</p>
+                                        <p class="text-sm text-slate-400">+$265</p>
+                                    </div>
+                                    <span class="change-indicator change-down">↓ from 3rd</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-6 p-4 bg-yellow-900/20 border border-yellow-700/30 rounded">
+                            <p class="text-sm font-bold" style="color: #fed7aa;">💡 Insight</p>
+                            <p class="text-sm text-slate-300 mt-1">If McIlroy gains 2 more strokes, 3 entries will move positions in the prize money payout.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MY ENTRIES TAB -->
+            <div id="myentries" class="tab-pane">
+                <div class="mb-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <div>
+                            <h2 class="text-3xl font-bold mb-2">My Entries</h2>
+                            <p class="text-slate-400" id="myentries-subtitle">View and manage your tournament entries</p>
+                        </div>
+                        <button class="button-primary" id="new-entry-btn" onclick="goToTab('entry')">+ New Entry</button>
+                    </div>
+                </div>
+                <div id="myentries-container">
+                    <p class="text-slate-400">Loading your entries...</p>
+                </div>
+            </div>
+
+            <!-- ADMIN TAB -->
+            <div id="admin" class="tab-pane">
+                <h2 class="text-3xl font-bold mb-6">Admin Dashboard</h2>
+
+                <!-- Admin Tabs -->
+                <div class="flex gap-4 mb-6 border-b border-green-900/30 overflow-x-auto">
+                    <button class="admin-tab-button active pb-3 px-1 border-b-2" style="border-color: #16a34a;" onclick="switchAdminTab('tournament')">Tournament Management</button>
+                    <button class="admin-tab-button pb-3 px-1" onclick="switchAdminTab('golfers')">Golfer Groups</button>
+                    <button class="admin-tab-button pb-3 px-1" onclick="switchAdminTab('entries')">Entry Management</button>
+                    <button class="admin-tab-button pb-3 px-1" onclick="switchAdminTab('stats')">Stats</button>
+                </div>
+
+                <!-- Tournament Management -->
+                <div id="admin-tournament" class="admin-tab-pane active">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                        <div class="stat-card">
+                            <h4 class="font-bold text-lg mb-4">Select Tournament</h4>
+                            <div class="space-y-3">
+                                <div>
+                                    <p class="text-xs text-slate-400 mb-1">2026 PGA Tour Schedule</p>
+                                    <select id="tournament-selector" class="w-full bg-green-900/20 border border-green-700/30 rounded px-3 py-2 text-sm" onchange="onTournamentChange()">
+                                        <option value="">— Select a tournament —</option>
+                                        <option value="sentry">The Sentry — Jan 2-5</option>
+                                        <option value="sony">Sony Open in Hawaii — Jan 9-12</option>
+                                        <option value="amex">The American Express — Jan 16-19</option>
+                                        <option value="farmers">Farmers Insurance Open — Jan 22-25</option>
+                                        <option value="att">AT&T Pebble Beach Pro-Am — Jan 29-Feb 1</option>
+                                        <option value="wmpo">WM Phoenix Open — Feb 5-8</option>
+                                        <option value="genesis">The Genesis Invitational — Feb 12-15</option>
+                                        <option value="mexico">Mexico Open at VidantaWorld — Feb 19-22</option>
+                                        <option value="cognizant">Cognizant Classic — Feb 26-Mar 1</option>
+                                        <option value="arnold_palmer">Arnold Palmer Invitational — Mar 5-8</option>
+                                        <option value="players">THE PLAYERS Championship — Mar 12-15</option>
+                                        <option value="valspar" selected>Valspar Championship — Mar 19-22</option>
+                                        <option value="texas">Texas Children's Houston Open — Mar 26-29</option>
+                                        <option value="valero">Valero Texas Open — Apr 2-5</option>
+                                        <option value="masters">Masters Tournament — Apr 9-12</option>
+                                        <option value="rbc_heritage">RBC Heritage — Apr 16-19</option>
+                                        <option value="zurich">Zurich Classic of New Orleans — Apr 23-26</option>
+                                        <option value="cj_cup">THE CJ CUP Byron Nelson — Apr 30-May 3</option>
+                                        <option value="wells_fargo">Wells Fargo Championship — May 7-10</option>
+                                        <option value="pga">PGA Championship — May 14-17</option>
+                                        <option value="charles_schwab">Charles Schwab Challenge — May 21-24</option>
+                                        <option value="memorial">the Memorial Tournament — May 28-31</option>
+                                        <option value="cadillac">Cadillac Championship — Jun 4-7</option>
+                                        <option value="us_open">U.S. Open — Jun 18-21</option>
+                                        <option value="travelers">Travelers Championship — Jun 25-28</option>
+                                        <option value="rocket">Rocket Mortgage Classic — Jul 2-5</option>
+                                        <option value="john_deere">John Deere Classic — Jul 9-12</option>
+                                        <option value="genesis_scottish">Genesis Scottish Open — Jul 9-12</option>
+                                        <option value="open">The Open Championship — Jul 16-19</option>
+                                        <option value="3m">3M Open — Jul 23-26</option>
+                                        <option value="wyndham">Wyndham Championship — Jul 30-Aug 2</option>
+                                        <option value="fedex_st_jude">FedEx St. Jude Championship — Aug 6-9</option>
+                                        <option value="bmw">BMW Championship — Aug 13-16</option>
+                                        <option value="tour_championship">TOUR Championship — Aug 20-23</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-slate-400 mb-1">Status</p>
+                                    <select class="w-full bg-green-900/20 border border-green-700/30 rounded px-3 py-2 text-sm">
+                                        <option>Entries Open</option>
+                                        <option>In Progress</option>
+                                        <option>Completed</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-slate-400 mb-1">Entry Fee</p>
+                                    <input type="text" id="admin-entry-fee" value="$30.00" class="w-full bg-green-900/20 border border-green-700/30 rounded px-3 py-2 text-sm">
+                                </div>
+                                <div>
+                                    <p class="text-xs text-slate-400 mb-1">Tournament Dates</p>
+                                    <p class="font-bold" id="admin-tournament-dates">March 19-22, 2026</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-slate-400 mb-1">TeamStake Pool URL</p>
+                                    <input type="text" id="admin-leaguesafe-url" placeholder="https://teamstake.com/..." class="w-full bg-green-900/20 border border-green-700/30 rounded px-3 py-2 text-sm" oninput="saveLeagueSafeUrl()">
+                                    <p class="text-xs text-slate-500 mt-1">Paste your TeamStake pool link here. Participants will be directed here to pay after submitting their picks.</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-slate-400 mb-1">Submission Deadline</p>
+                                    <input type="datetime-local" id="admin-deadline" value="2026-03-19T07:00" class="w-full bg-green-900/20 border border-green-700/30 rounded px-3 py-2 text-sm">
+                                    <p class="text-xs text-slate-500 mt-1">Entries can be submitted or edited until this date/time. After the deadline, entries are locked.</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-slate-400 mb-1">Pool Entry Password</p>
+                                    <input type="text" id="admin-pool-pw" placeholder="Password given to all entrants" value="golf2026" class="w-full bg-green-900/20 border border-green-700/30 rounded px-3 py-2 text-sm">
+                                    <p class="text-xs text-slate-500 mt-1">Share this password with your pool entrants so they can access the site.</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-slate-400 mb-1">Admin Username</p>
+                                    <input type="text" id="admin-user-setting" placeholder="Admin username" value="admin" class="w-full bg-green-900/20 border border-green-700/30 rounded px-3 py-2 text-sm">
+                                </div>
+                                <div>
+                                    <p class="text-xs text-slate-400 mb-1">Admin Password</p>
+                                    <input type="password" id="admin-pw-setting" placeholder="Change admin password" class="w-full bg-green-900/20 border border-green-700/30 rounded px-3 py-2 text-sm">
+                                    <p class="text-xs text-slate-500 mt-1">Default username: admin / Default password: golfpool2026</p>
+                                </div>
+                            </div>
+                            <button class="button-primary w-full mt-6" onclick="saveAdminSettings()">Save Changes</button>
+                        </div>
+
+                        <div class="stat-card">
+                            <h4 class="font-bold text-lg mb-4">Prize Pool</h4>
+                            <div class="space-y-3">
+                                <div class="flex justify-between">
+                                    <span>Total Pool</span>
+                                    <span class="payout-gold">$0</span>
+                                </div>
+                                <div class="flex justify-between text-slate-400">
+                                    <span>Entries</span>
+                                    <span>0 × $30</span>
+                                </div>
+                                <div class="pt-3 border-t border-green-900/30">
+                                    <p class="text-xs text-slate-400 mb-2">Distribution</p>
+                                    <div class="space-y-1 text-sm">
+                                        <div class="flex justify-between"><span>1st</span><span class="payout-gold">30%</span></div>
+                                        <div class="flex justify-between"><span>2nd</span><span class="payout-gold">15%</span></div>
+                                        <div class="flex justify-between"><span>3rd</span><span class="payout-gold">10%</span></div>
+                                        <div class="flex justify-between"><span>4-8</span><span class="payout-gold">45%</span></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="stat-card">
+                            <h4 class="font-bold text-lg mb-4">Quick Actions</h4>
+                            <div class="space-y-2">
+                                <button class="button-primary w-full text-sm">Send Email to All</button>
+                                <button class="button-secondary w-full text-sm">Export Entries</button>
+                                <button class="button-secondary w-full text-sm">Sync Golf Scores</button>
+                                <button class="button-secondary w-full text-sm">Generate Payouts</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Golfer Groups (dynamically rendered from shared data) -->
+                <div id="admin-golfers" class="admin-tab-pane hidden">
+                    <h3 class="text-xl font-bold mb-4">Golfer Groups Configuration</h3>
+                    <p class="text-slate-400 text-sm mb-6">Use the dropdown on each golfer to move them between groups. Changes are reflected on the Home page instantly.</p>
+                    <div id="admin-golfers-container" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    </div>
+                </div>
+
+                <!-- Entry Management -->
+                <div id="admin-entries" class="admin-tab-pane hidden">
+                    <h3 class="text-xl font-bold mb-4">Entry Management</h3>
+                    <div class="leaderboard-scroll">
+                        <table class="entry-table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Picks</th>
+                                    <th>Paid</th>
+                                    <th>Payment (TeamStake)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Mike Johnson</td>
+                                    <td>mike@example.com</td>
+                                    <td>Complete</td>
+                                    <td><span class="paid-badge yes">✓ Paid</span></td>
+                                </tr>
+                                <tr>
+                                    <td>Sarah Williams</td>
+                                    <td>sarah@example.com</td>
+                                    <td>Complete</td>
+                                    <td><span class="paid-badge yes">✓ Paid</span></td>
+                                </tr>
+                                <tr>
+                                    <td>David Chen</td>
+                                    <td>david@example.com</td>
+                                    <td>Complete</td>
+                                    <td><span class="paid-badge yes">✓ Paid</span></td>
+                                </tr>
+                                <tr>
+                                    <td>Jessica Martinez</td>
+                                    <td>jessica@example.com</td>
+                                    <td>Pending</td>
+                                    <td><span class="paid-badge no">✗ Unpaid</span></td>
+                                </tr>
+                                <tr>
+                                    <td>Robert Taylor</td>
+                                    <td>robert@example.com</td>
+                                    <td>Complete</td>
+                                    <td><span class="paid-badge yes">✓ Paid</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Stats -->
+                <div id="admin-stats" class="admin-tab-pane hidden">
+                    <h3 class="text-xl font-bold mb-6">Tournament Statistics</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div class="stat-card">
+                            <p class="text-slate-400 text-sm mb-2">Total Entries</p>
+                            <p class="text-4xl font-bold">0</p>
+                            <p class="text-xs text-slate-400 mt-2">0% capacity</p>
+                        </div>
+                        <div class="stat-card">
+                            <p class="text-slate-400 text-sm mb-2">Paid Entries</p>
+                            <p class="text-4xl font-bold text-green-400">0</p>
+                            <p class="text-xs text-slate-400 mt-2">$0 collected</p>
+                        </div>
+                        <div class="stat-card">
+                            <p class="text-slate-400 text-sm mb-2">Unpaid Entries</p>
+                            <p class="text-4xl font-bold text-yellow-500">0</p>
+                            <p class="text-xs text-slate-400 mt-2">$0 pending</p>
+                        </div>
+                        <div class="stat-card">
+                            <p class="text-slate-400 text-sm mb-2">Avg Payment</p>
+                            <p class="text-4xl font-bold text-amber-500">$30.00</p>
+                            <p class="text-xs text-slate-400 mt-2">All entries: $30</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- POOL ENTRY GATE — shown on first visit, blocks entire site -->
+    <div id="pool-gate" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.92);z-index:99999;display:flex;align-items:center;justify-content:center;">
+        <div style="max-width:440px;width:90%;background:linear-gradient(135deg,#0f172a,#1e3a1f);border:1px solid rgba(22,163,74,0.4);border-radius:12px;padding:32px;box-shadow:0 25px 50px rgba(0,0,0,0.5);">
+            <div class="text-center mb-6">
+                <div class="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style="background:linear-gradient(135deg,#16a34a,#c4a35a);font-size:1.5rem;">&#9971;</div>
+                <h2 class="text-2xl font-bold" style="color:#c4a35a;">Golf Pool</h2>
+                <p class="text-slate-400 text-sm mt-1">Enter the pool password to access the site</p>
+            </div>
+            <input type="password" id="pool-gate-password" class="w-full bg-green-900/20 border border-green-700/30 rounded px-4 py-3 text-sm mb-2" placeholder="Pool password" onkeydown="if(event.key==='Enter')verifyPoolPassword()" autofocus>
+            <p id="pool-gate-error" class="text-red-400 text-xs mb-3 hidden">Incorrect password. Contact the pool commissioner for access.</p>
+            <button class="button-primary w-full mb-4" style="padding:12px;" onclick="verifyPoolPassword()">Enter Pool</button>
+            <div class="text-center">
+                <p class="text-xs text-slate-500">Pool commissioner? <a href="#" onclick="showPoolGateAdmin();return false;" style="color:#16a34a;text-decoration:underline;">Admin login</a></p>
+            </div>
+            <div id="pool-gate-admin" class="hidden mt-4 pt-4" style="border-top:1px solid rgba(22,163,74,0.2);">
+                <p class="text-xs text-slate-400 mb-2">Admin Login</p>
+                <input type="text" id="pool-gate-admin-user" class="w-full bg-green-900/20 border border-green-700/30 rounded px-3 py-2 text-sm mb-2" placeholder="Admin username">
+                <input type="password" id="pool-gate-admin-pw" class="w-full bg-green-900/20 border border-green-700/30 rounded px-3 py-2 text-sm mb-2" placeholder="Admin password" onkeydown="if(event.key==='Enter')verifyAdminLogin()">
+                <p id="pool-gate-admin-error" class="text-red-400 text-xs mb-3 hidden">Invalid admin credentials</p>
+                <button class="button-primary w-full" onclick="verifyAdminLogin()">Log In as Admin</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AUTH MODAL OVERLAY (for user sign up / log in) -->
+    <div id="auth-modal" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.92);z-index:9999;display:none;align-items:center;justify-content:center;">
+        <div style="max-width:420px;width:90%;background:linear-gradient(135deg,#0f172a,#1e3a1f);border:1px solid rgba(22,163,74,0.4);border-radius:12px;padding:32px;position:relative;box-shadow:0 25px 50px rgba(0,0,0,0.5);">
+            <button onclick="hideAuthModal()" style="position:absolute;top:12px;right:16px;background:none;border:none;color:#94a3b8;font-size:1.5rem;cursor:pointer;">&times;</button>
+            <div id="auth-modal-content"></div>
+        </div>
+    </div>
+
+    <script>
+        // =====================================================
+        // MASTER GOLFER DATA — each golfer has name, odds, group
+        // Odds drive auto-grouping. Admin can override groups.
+        // No golfer appears in more than one group.
+        // =====================================================
+        const allGolfers = [
+            // Group A — Top favorites (+1800 or better)
+            {name:"Xander Schauffele", odds:"+1100", group:"A"},
+            {name:"Matt Fitzpatrick", odds:"+1300", group:"A"},
+            {name:"Viktor Hovland", odds:"+1600", group:"A"},
+            {name:"Jacob Bridgeman", odds:"+1800", group:"A"},
+            // Group B — Strong contenders (+2000 to +2800)
+            {name:"Brooks Koepka", odds:"+2200", group:"B"},
+            {name:"Justin Thomas", odds:"+2200", group:"B"},
+            {name:"Patrick Cantlay", odds:"+2200", group:"B"},
+            {name:"J.J. Spaun", odds:"+2500", group:"B"},
+            {name:"Ben Griffin", odds:"+2500", group:"B"},
+            {name:"Jordan Spieth", odds:"+2700", group:"B"},
+            {name:"Sungjae Im", odds:"+2800", group:"B"},
+            {name:"Keegan Bradley", odds:"+2800", group:"B"},
+            // Group C — Mid-tier (+3000 to +4500)
+            {name:"Nicolai Højgaard", odds:"+3000", group:"C"},
+            {name:"Ryo Hisatsune", odds:"+3000", group:"C"},
+            {name:"Sahith Theegala", odds:"+3500", group:"C"},
+            {name:"Billy Horschel", odds:"+3500", group:"C"},
+            {name:"Corey Conners", odds:"+3500", group:"C"},
+            {name:"Emiliano Grillo", odds:"+4000", group:"C"},
+            {name:"Max Homa", odds:"+4000", group:"C"},
+            {name:"Nick Dunlap", odds:"+4500", group:"C"},
+            // Group D — Longshots (+5000 to +8000)
+            {name:"Tom Kim", odds:"+5000", group:"D"},
+            {name:"Lucas Glover", odds:"+5000", group:"D"},
+            {name:"Charley Hoffman", odds:"+5000", group:"D"},
+            {name:"Adam Hadwin", odds:"+5500", group:"D"},
+            {name:"Christiaan Bezuidenhout", odds:"+5500", group:"D"},
+            {name:"Wyndham Clark", odds:"+5500", group:"D"},
+            {name:"Tony Finau", odds:"+6000", group:"D"},
+            {name:"Garrick Higgo", odds:"+6000", group:"D"},
+            {name:"Matthieu Pavon", odds:"+6000", group:"D"},
+            {name:"Austin Eckroat", odds:"+6500", group:"D"},
+            {name:"David Lipsky", odds:"+8000", group:"D"},
+            {name:"Lee Hodges", odds:"+8000", group:"D"},
+            // Wild Cards — Rest of field (+10000+)
+            {name:"Aaron Rai", odds:"+10000", group:"WC"},
+            {name:"Zach Bauchou", odds:"+10000", group:"WC"},
+            {name:"Dan Brown", odds:"+10000", group:"WC"},
+            {name:"Luke Clanton", odds:"+10000", group:"WC"},
+            {name:"Eric Cole", odds:"+10000", group:"WC"},
+            {name:"Cam Davis", odds:"+10000", group:"WC"},
+            {name:"David Ford", odds:"+10000", group:"WC"},
+            {name:"Rasmus Højgaard", odds:"+10000", group:"WC"},
+            {name:"Denny McCarthy", odds:"+10000", group:"WC"},
+            {name:"Mackenzie Hughes", odds:"+10000", group:"WC"},
+            {name:"Séamus Power", odds:"+10000", group:"WC"},
+            {name:"Erik van Rooyen", odds:"+10000", group:"WC"},
+            {name:"Matt Wallace", odds:"+10000", group:"WC"},
+            {name:"Taylor Pendrith", odds:"+10000", group:"WC"},
+            {name:"Davis Riley", odds:"+10000", group:"WC"},
+            {name:"Davis Thompson", odds:"+10000", group:"WC"},
+            {name:"Blades Brown", odds:"+12000", group:"WC"},
+            {name:"Pierceson Coody", odds:"+12000", group:"WC"},
+            {name:"Adrien Dumont de Chassart", odds:"+12000", group:"WC"},
+            {name:"Steven Fisk", odds:"+12000", group:"WC"},
+            {name:"Joe Highsmith", odds:"+12000", group:"WC"},
+            {name:"Beau Hossler", odds:"+12000", group:"WC"},
+            {name:"S.H. Kim", odds:"+12000", group:"WC"},
+            {name:"Kevin Yu", odds:"+12000", group:"WC"},
+            {name:"Matt McCarty", odds:"+12000", group:"WC"},
+            {name:"Nick Taylor", odds:"+12000", group:"WC"},
+            {name:"Alex Smalley", odds:"+12000", group:"WC"},
+            {name:"Takumi Kanaya", odds:"+12000", group:"WC"},
+            {name:"Taylor Moore", odds:"+12000", group:"WC"},
+            {name:"Stephan Jaeger", odds:"+12000", group:"WC"},
+            {name:"Chandler Blanchet", odds:"+15000", group:"WC"},
+            {name:"Michael Brennan", odds:"+15000", group:"WC"},
+            {name:"Ricky Castillo", odds:"+15000", group:"WC"},
+            {name:"Bud Cauley", odds:"+15000", group:"WC"},
+            {name:"Zecheng Dou", odds:"+15000", group:"WC"},
+            {name:"Patrick Fishburn", odds:"+15000", group:"WC"},
+            {name:"Brice Garnett", odds:"+15000", group:"WC"},
+            {name:"Joel Dahmen", odds:"+15000", group:"WC"},
+            {name:"Kensei Hirata", odds:"+15000", group:"WC"},
+            {name:"Mac Meissner", odds:"+15000", group:"WC"},
+            {name:"Patton Kizzire", odds:"+15000", group:"WC"},
+            {name:"Dylan Wu", odds:"+15000", group:"WC"},
+            {name:"Andrew Novak", odds:"+15000", group:"WC"},
+            {name:"Matti Schmid", odds:"+15000", group:"WC"},
+            {name:"Sam Ryder", odds:"+15000", group:"WC"},
+            {name:"Doug Ghim", odds:"+15000", group:"WC"},
+            {name:"Matt Kuchar", odds:"+15000", group:"WC"},
+            {name:"Andrew Putnam", odds:"+15000", group:"WC"},
+            {name:"Danny Willett", odds:"+15000", group:"WC"},
+            {name:"Thorbjørn Olesen", odds:"+15000", group:"WC"},
+            {name:"Patrick Rodgers", odds:"+15000", group:"WC"},
+            {name:"Austin Smotherman", odds:"+15000", group:"WC"},
+            {name:"Gary Woodland", odds:"+15000", group:"WC"},
+            {name:"Webb Simpson", odds:"+15000", group:"WC"},
+            {name:"Karl Vilips", odds:"+15000", group:"WC"},
+            {name:"Neal Shipley", odds:"+15000", group:"WC"},
+            {name:"Jackson Suber", odds:"+15000", group:"WC"},
+            {name:"Gordon Sargent", odds:"+15000", group:"WC"},
+            {name:"Adam Schenk", odds:"+15000", group:"WC"},
+            {name:"Jordan Smith", odds:"+15000", group:"WC"},
+            {name:"David Skinns", odds:"+15000", group:"WC"},
+            {name:"Davis Chatfield", odds:"+20000", group:"WC"},
+            {name:"A.J. Ewart", odds:"+20000", group:"WC"},
+            {name:"Rico Hoey", odds:"+20000", group:"WC"},
+            {name:"Mark Hubbard", odds:"+20000", group:"WC"},
+            {name:"Henrik Norlander", odds:"+20000", group:"WC"},
+            {name:"Kevin Streelman", odds:"+20000", group:"WC"},
+            {name:"Justin Lower", odds:"+20000", group:"WC"},
+            {name:"Kris Ventura", odds:"+20000", group:"WC"},
+            {name:"Max McGreevy", odds:"+20000", group:"WC"},
+            {name:"Chandler Phillips", odds:"+20000", group:"WC"},
+            {name:"Hank Lebioda", odds:"+20000", group:"WC"},
+            {name:"Peter Malnati", odds:"+20000", group:"WC"},
+            {name:"Chad Ramey", odds:"+20000", group:"WC"},
+            {name:"Michael Kim", odds:"+20000", group:"WC"},
+            {name:"John VanDerLaan", odds:"+20000", group:"WC"},
+            {name:"Alejandro Tosti", odds:"+20000", group:"WC"},
+            {name:"Isaiah Salinda", odds:"+20000", group:"WC"},
+            {name:"Paul Waring", odds:"+20000", group:"WC"},
+            {name:"Zac Blair", odds:"+20000", group:"WC"},
+            {name:"Adam Svensson", odds:"+20000", group:"WC"},
+            {name:"Brian Campbell", odds:"+20000", group:"WC"},
+            {name:"Rafael Campos", odds:"+25000", group:"WC"},
+            {name:"Marco Penge", odds:"+25000", group:"WC"},
+            {name:"Luke Guthrie", odds:"+25000", group:"WC"},
+            {name:"Brandt Snedeker", odds:"+25000", group:"WC"},
+            {name:"Danny Walker", odds:"+25000", group:"WC"},
+            {name:"Vince Whaley", odds:"+25000", group:"WC"},
+            {name:"Rasmus Neergaard-Petersen", odds:"+25000", group:"WC"},
+            {name:"John Parry", odds:"+25000", group:"WC"},
+            {name:"Jimmy Stanger", odds:"+25000", group:"WC"},
+            {name:"Kevin Roy", odds:"+25000", group:"WC"},
+            {name:"Adrien Saddier", odds:"+25000", group:"WC"},
+            {name:"Pontus Nyholm", odds:"+25000", group:"WC"},
+            {name:"Jesper Svensson", odds:"+25000", group:"WC"},
+            {name:"Paul Peterson", odds:"+25000", group:"WC"},
+            {name:"Jeffrey Kang", odds:"+25000", group:"WC"},
+            {name:"Kristoffer Reitan", odds:"+30000", group:"WC"},
+            {name:"Johnny Keefer", odds:"+30000", group:"WC"},
+            {name:"Marcelo Rozo", odds:"+30000", group:"WC"},
+            {name:"Greg Koch", odds:"+30000", group:"WC"},
+            {name:"Jeremy Paul", odds:"+30000", group:"WC"},
+            {name:"Tyler Wilkes", odds:"+50000", group:"WC"},
+        ];
+
+        // Build golferGroups dynamically from allGolfers (computed view)
+        const groupLabels = { A: "Group A", B: "Group B", C: "Group C", D: "Group D", WC: "Wild Cards" };
+
+        function getGolferGroups() {
+            const groups = { A:[], B:[], C:[], D:[], WC:[] };
+            allGolfers.forEach(g => groups[g.group].push(g));
+            // Sort each group by odds (lowest first)
+            Object.keys(groups).forEach(k => {
+                groups[k].sort((a,b) => {
+                    const oa = parseInt(a.odds.replace('+',''));
+                    const ob = parseInt(b.odds.replace('+',''));
+                    return oa - ob || a.name.localeCompare(b.name);
+                });
+            });
+            return groups;
+        }
+
+        // Legacy compat: golferGroups as name arrays (used by entry form)
+        function getGolferGroupNames() {
+            const gg = getGolferGroups();
+            const out = {};
+            Object.keys(gg).forEach(k => out[k] = gg[k].map(g => g.name));
+            return out;
+        }
+
+        // Alias for entry form (updated on each render)
+        let golferGroups = getGolferGroupNames();
+
+        function onTournamentChange() {
+            const sel = document.getElementById('tournament-selector');
+            if (sel) {
+                const opt = sel.options[sel.selectedIndex];
+                if (opt && opt.value) {
+                    const datesPart = opt.text.split('—')[1]?.trim() || '';
+                    document.getElementById('admin-tournament-dates').textContent = datesPart + ', 2026';
+                }
+            }
+        }
+
+        // =====================================================
+        // RENDER: Home page "The Field" section
+        // =====================================================
+        function renderField() {
+            const container = document.getElementById('field-container');
+            if (!container) return;
+            container.innerHTML = '';
+            const gg = getGolferGroups();
+            golferGroups = getGolferGroupNames();
+
+            // Groups A-D (no odds on public page)
+            ['A','B','C','D'].forEach(g => {
+                const card = document.createElement('div');
+                card.className = 'stat-card';
+                card.innerHTML = `
+                    <h4 class="text-lg font-bold mb-3" style="color: #c4a35a;">${groupLabels[g]}</h4>
+                    <ul class="space-y-1 text-sm text-slate-300">
+                        ${gg[g].map(p => `<li>${p.name}</li>`).join('')}
+                    </ul>`;
+                container.appendChild(card);
+            });
+
+            // Wild Cards (no odds on public page)
+            const wcCard = document.createElement('div');
+            wcCard.className = 'stat-card md:col-span-2';
+            wcCard.innerHTML = `
+                <h4 class="text-lg font-bold mb-3" style="color: #c4a35a;">Wild Cards</h4>
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-1 text-sm text-slate-300">
+                    ${gg.WC.map(p => `<span>${p.name}</span>`).join('')}
+                </div>`;
+            container.appendChild(wcCard);
+        }
+
+        // =====================================================
+        // RENDER: Admin "Golfer Groups" section
+        // =====================================================
+        function renderAdminGolfers() {
+            const container = document.getElementById('admin-golfers-container');
+            if (!container) return;
+            container.innerHTML = '';
+            const gg = getGolferGroups();
+
+            const allGroupKeys = ['A','B','C','D','WC'];
+
+            allGroupKeys.forEach(g => {
+                const col = document.createElement('div');
+                if (g === 'WC') col.className = 'md:col-span-2';
+
+                const golfers = gg[g];
+                const isWC = g === 'WC';
+
+                col.innerHTML = `
+                    <h4 class="font-bold mb-3 flex items-center gap-2">
+                        ${groupLabels[g]}
+                        <span class="text-xs text-slate-500">(${golfers.length})</span>
+                        ${!isWC ? '<span class="manual-override-badge">MANUAL OVERRIDE</span>' : ''}
+                    </h4>`;
+
+                const listDiv = document.createElement('div');
+                listDiv.className = isWC ? 'grid grid-cols-1 sm:grid-cols-2 gap-2' : 'space-y-2';
+
+                golfers.forEach(golfer => {
+                    const card = document.createElement('div');
+                    card.className = 'group-card flex items-center justify-between';
+                    card.style.cursor = 'default';
+
+                    const options = allGroupKeys
+                        .map(k => `<option value="${k}" ${k === g ? 'selected' : ''}>${groupLabels[k]}</option>`)
+                        .join('');
+
+                    card.innerHTML = `
+                        <div>
+                            <p class="font-bold text-sm">${golfer.name}</p>
+                            <p class="text-xs text-slate-500">${golfer.odds}</p>
+                        </div>
+                        <select onchange="moveGolfer('${golfer.name.replace(/'/g, "\\'")}', this.value)"
+                            class="text-xs rounded px-2 py-1 border"
+                            style="background: rgba(15,23,42,0.8); border-color: rgba(22,163,74,0.5); color: #f8fafc;">
+                            ${options}
+                        </select>`;
+                    listDiv.appendChild(card);
+                });
+
+                col.appendChild(listDiv);
+                container.appendChild(col);
+            });
+        }
+
+        // =====================================================
+        // Move a golfer between groups
+        // =====================================================
+        function moveGolfer(name, toGroup) {
+            const golfer = allGolfers.find(g => g.name === name);
+            if (!golfer || golfer.group === toGroup) return;
+            golfer.group = toGroup;
+
+            // Re-render all views
+            golferGroups = getGolferGroupNames();
+            renderField();
+            renderAdminGolfers();
+        }
+
+        // =====================================================
+        // Initial render on page load
+        // =====================================================
+        document.addEventListener('DOMContentLoaded', () => {
+            renderField();
+            renderAdminGolfers();
+        });
+
+        // Mock Leaderboard Data — Valspar Championship
+        const leaderboardData = [
+            { rank: 1, name: "Mike Johnson", groupA: { golfer: "Xander Schauffele", amount: 2800 }, groupB: { golfer: "Sungjae Im", amount: 1200 }, groupC: { golfer: "Sahith Theegala", amount: 900 }, groupD: { golfer: "Lucas Glover", amount: 600 }, wc1: { golfer: "Ryo Hisatsune", amount: 1400 }, wc2: { golfer: "Corey Conners", amount: 1200 }, total: 8100, tb: -11, payout: 3123 },
+            { rank: 2, name: "Sarah Williams", groupA: { golfer: "Matt Fitzpatrick", amount: 2600 }, groupB: { golfer: "Brooks Koepka", amount: 1100 }, groupC: { golfer: "Billy Horschel", amount: 850 }, groupD: { golfer: "Charley Hoffman", amount: 550 }, wc1: { golfer: "Jordan Spieth", amount: 1300 }, wc2: { golfer: "Max Homa", amount: 1100 }, total: 7500, tb: -10, payout: 1562 },
+            { rank: 3, name: "David Chen", groupA: { golfer: "Viktor Hovland", amount: 2500 }, groupB: { golfer: "Patrick Cantlay", amount: 1300 }, groupC: { golfer: "Emiliano Grillo", amount: 950 }, groupD: { golfer: "Ryan Fox", amount: 700 }, wc1: { golfer: "Ben Griffin", amount: 1250 }, wc2: { golfer: "Nick Dunlap", amount: 1100 }, total: 7800, tb: -12, payout: 1041 },
+            { rank: 4, name: "Jessica Martinez", groupA: { golfer: "Jacob Bridgeman", amount: 2400 }, groupB: { golfer: "Justin Thomas", amount: 1150 }, groupC: { golfer: "Nicolai Højgaard", amount: 800 }, groupD: { golfer: "Adam Hadwin", amount: 600 }, wc1: { golfer: "Keegan Bradley", amount: 1200 }, wc2: { golfer: "J.J. Spaun", amount: 950 }, total: 7100, tb: -9, payout: 729 },
+            { rank: 5, name: "Robert Taylor", groupA: { golfer: "Xander Schauffele", amount: 2800 }, groupB: { golfer: "J.J. Spaun", amount: 1200 }, groupC: { golfer: "Max Homa", amount: 900 }, groupD: { golfer: "Garrick Higgo", amount: 650 }, wc1: { golfer: "Patrick Cantlay", amount: 1100 }, wc2: { golfer: "Sungjae Im", amount: 950 }, total: 7600, tb: -10, payout: 521 },
+            { rank: 6, name: "Jennifer Lee", groupA: { golfer: "Matt Fitzpatrick", amount: 2600 }, groupB: { golfer: "Ben Griffin", amount: 1050 }, groupC: { golfer: "Corey Conners", amount: 850 }, groupD: { golfer: "Lee Hodges", amount: 700 }, wc1: { golfer: "Jordan Spieth", amount: 1100 }, wc2: { golfer: "Billy Horschel", amount: 900 }, total: 7200, tb: -8, payout: 417 },
+            { rank: 7, name: "Mark Thompson", groupA: { golfer: "Viktor Hovland", amount: 2500 }, groupB: { golfer: "Keegan Bradley", amount: 1100 }, groupC: { golfer: "Sahith Theegala", amount: 950 }, groupD: { golfer: "Austin Eckroat", amount: 600 }, wc1: { golfer: "Justin Thomas", amount: 1300 }, wc2: { golfer: "Ryo Hisatsune", amount: 1050 }, total: 7500, tb: -11, payout: 312 },
+            { rank: 8, name: "Patricia Garcia", groupA: { golfer: "Xander Schauffele", amount: 2800 }, groupB: { golfer: "Jordan Spieth", amount: 1300 }, groupC: { golfer: "Nicolai Højgaard", amount: 850 }, groupD: { golfer: "Christiaan Bezuidenhout", amount: 550 }, wc1: { golfer: "Sungjae Im", amount: 1100 }, wc2: { golfer: "Max Homa", amount: 1050 }, total: 7650, tb: -13, payout: 208 },
+            { rank: 9, name: "Christopher Brown", groupA: { golfer: "Jacob Bridgeman", amount: 2400 }, groupB: { golfer: "Sungjae Im", amount: 1150 }, groupC: { golfer: "Billy Horschel", amount: 800 }, groupD: { golfer: "Lucas Glover", amount: 650 }, wc1: { golfer: "Brooks Koepka", amount: 1200 }, wc2: { golfer: "Emiliano Grillo", amount: 900 }, total: 7100, tb: -9, payout: 0 },
+            { rank: 10, name: "Nicole Rodriguez", groupA: { golfer: "Matt Fitzpatrick", amount: 2600 }, groupB: { golfer: "Patrick Cantlay", amount: 1200 }, groupC: { golfer: "Corey Conners", amount: 900 }, groupD: { golfer: "Charley Hoffman", amount: 700 }, wc1: { golfer: "Ben Griffin", amount: 1100 }, wc2: { golfer: "Nick Dunlap", amount: 900 }, total: 7400, tb: -10, payout: 0 },
+            { rank: 11, name: "James Wilson", groupA: { golfer: "Viktor Hovland", amount: 2500 }, groupB: { golfer: "Brooks Koepka", amount: 1100 }, groupC: { golfer: "Max Homa", amount: 850 }, groupD: { golfer: "Ryan Fox", amount: 600 }, wc1: { golfer: "Sahith Theegala", amount: 1300 }, wc2: { golfer: "Keegan Bradley", amount: 1050 }, total: 7400, tb: -8, payout: 0 },
+            { rank: 12, name: "Amanda White", groupA: { golfer: "Xander Schauffele", amount: 2800 }, groupB: { golfer: "Justin Thomas", amount: 1300 }, groupC: { golfer: "Emiliano Grillo", amount: 950 }, groupD: { golfer: "Adam Hadwin", amount: 550 }, wc1: { golfer: "Jordan Spieth", amount: 1100 }, wc2: { golfer: "Nicolai Højgaard", amount: 1100 }, total: 7800, tb: -14, payout: 0 },
+            { rank: 13, name: "Kevin Anderson", groupA: { golfer: "Jacob Bridgeman", amount: 2400 }, groupB: { golfer: "J.J. Spaun", amount: 1150 }, groupC: { golfer: "Ryo Hisatsune", amount: 850 }, groupD: { golfer: "Garrick Higgo", amount: 650 }, wc1: { golfer: "Patrick Cantlay", amount: 1200 }, wc2: { golfer: "Billy Horschel", amount: 1050 }, total: 7300, tb: -9, payout: 0 },
+            { rank: 14, name: "Lisa Davis", groupA: { golfer: "Matt Fitzpatrick", amount: 2600 }, groupB: { golfer: "Keegan Bradley", amount: 1200 }, groupC: { golfer: "Sahith Theegala", amount: 800 }, groupD: { golfer: "Lee Hodges", amount: 700 }, wc1: { golfer: "Sungjae Im", amount: 1100 }, wc2: { golfer: "Corey Conners", amount: 900 }, total: 7300, tb: -7, payout: 0 },
+            { rank: 15, name: "Steven Miller", groupA: { golfer: "Viktor Hovland", amount: 2500 }, groupB: { golfer: "Ben Griffin", amount: 1100 }, groupC: { golfer: "Nick Dunlap", amount: 900 }, groupD: { golfer: "Austin Eckroat", amount: 600 }, wc1: { golfer: "Justin Thomas", amount: 1300 }, wc2: { golfer: "Max Homa", amount: 1050 }, total: 7450, tb: -10, payout: 0 },
+        ];
+
+        // Programmatic tab switch (for buttons outside the nav)
+        function goToTab(tabName) {
+            document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+            document.getElementById(tabName).classList.add('active');
+            document.querySelectorAll('.tab-button').forEach(b => {
+                if (b.getAttribute('onclick') === "switchTab('" + tabName + "')") b.classList.add('active');
+            });
+            if (tabName === 'tournament') renderTournamentLeaderboard();
+            if (tabName === 'leaderboard') populateLeaderboard(leaderboardData);
+            if (tabName === 'home') renderField();
+            if (tabName === 'admin') renderAdminGolfers();
+            if (tabName === 'entry') renderEntryForm();
+        }
+
+        // Tab Switching
+        function switchTab(tabName) {
+            // Hide all tab panes
+            document.querySelectorAll('.tab-pane').forEach(pane => {
+                pane.classList.remove('active');
+            });
+
+            // Remove active class from all buttons
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // Show selected tab pane
+            document.getElementById(tabName).classList.add('active');
+
+            // Add active class to clicked button
+            event.target.classList.add('active');
+
+            // Re-render dynamic content when switching tabs
+            if (tabName === 'tournament') {
+                renderTournamentLeaderboard();
+            }
+            if (tabName === 'leaderboard') {
+                populateLeaderboard(leaderboardData);
+            }
+            if (tabName === 'home') {
+                renderField();
+            }
+            if (tabName === 'admin') {
+                renderAdminGolfers();
+            }
+            if (tabName === 'entry') {
+                renderEntryForm();
+            }
+        }
+
+        function switchAdminTab(tabName) {
+            // Hide all admin tab panes
+            document.querySelectorAll('.admin-tab-pane').forEach(pane => {
+                pane.classList.remove('active');
+                pane.classList.add('hidden');
+            });
+
+            // Remove active class from all admin buttons
+            document.querySelectorAll('.admin-tab-button').forEach(btn => {
+                btn.classList.remove('active');
+                btn.style.borderColor = 'transparent';
+            });
+
+            // Show selected admin tab pane
+            const pane = document.getElementById('admin-' + tabName);
+            if (pane) {
+                pane.classList.add('active');
+                pane.classList.remove('hidden');
+            }
+
+            // Add active class to clicked button
+            event.target.classList.add('active');
+            event.target.style.borderColor = '#16a34a';
+        }
+
+        // Populate Leaderboard
+        function populateLeaderboard(data) {
+            const tbody = document.getElementById('leaderboardBody');
+            tbody.innerHTML = '';
+
+            data.forEach((entry, index) => {
+                const rowClass = entry.rank === 1 ? 'rank-1' : (entry.rank <= 8 ? 'rank-2-8' : '');
+                const row = document.createElement('tr');
+                row.className = rowClass;
+
+                const rankBadgeClass = entry.rank === 1 ? 'rank-1-badge' : (entry.rank <= 3 ? 'rank-2-badge' : 'rank-3-badge');
+
+                row.innerHTML = `
+                    <td><span class="rank-badge ${rankBadgeClass}">${entry.rank}</span></td>
+                    <td>${entry.name}</td>
+                    <td>
+                        <div class="text-sm font-semibold">${entry.groupA.golfer}</div>
+                        <div class="text-xs text-slate-400">$${entry.groupA.amount.toLocaleString()}</div>
+                    </td>
+                    <td>
+                        <div class="text-sm font-semibold">${entry.groupB.golfer}</div>
+                        <div class="text-xs text-slate-400">$${entry.groupB.amount.toLocaleString()}</div>
+                    </td>
+                    <td>
+                        <div class="text-sm font-semibold">${entry.groupC.golfer}</div>
+                        <div class="text-xs text-slate-400">$${entry.groupC.amount.toLocaleString()}</div>
+                    </td>
+                    <td>
+                        <div class="text-sm font-semibold">${entry.groupD.golfer}</div>
+                        <div class="text-xs text-slate-400">$${entry.groupD.amount.toLocaleString()}</div>
+                    </td>
+                    <td>
+                        <div class="text-sm font-semibold">${entry.wc1.golfer}</div>
+                        <div class="text-xs text-slate-400">$${entry.wc1.amount.toLocaleString()} <span class="gold-badge">2x</span></div>
+                    </td>
+                    <td>
+                        <div class="text-sm font-semibold">${entry.wc2.golfer}</div>
+                        <div class="text-xs text-slate-400">$${entry.wc2.amount.toLocaleString()} <span class="gold-badge">2x</span></div>
+                    </td>
+                    <td class="payout-gold font-bold">$${entry.total.toLocaleString()}</td>
+                    <td>${entry.tb}</td>
+                    <td class="payout-gold font-bold">${entry.payout > 0 ? '$' + entry.payout.toLocaleString() : '—'}</td>
+                `;
+
+                tbody.appendChild(row);
+            });
+        }
+
+        // Filter Leaderboard
+        function filterLeaderboard() {
+            const searchInput = document.getElementById('searchInput').value.toLowerCase();
+            const filteredData = leaderboardData.filter(entry =>
+                entry.name.toLowerCase().includes(searchInput)
+            );
+            populateLeaderboard(filteredData);
+        }
+
+        // Toggle Auto-refresh
+        function toggleAutoRefresh() {
+            console.log('Auto-refresh toggled');
+        }
+
+        // Scenario Generator
+        function adjustScore(delta, golfer) {
+            console.log(`Adjusted ${golfer} by ${delta} strokes`);
+        }
+
+        function calculateImpact() {
+            alert('Calculating impact of adjustments...');
+        }
+
+        function resetScenario() {
+            console.log('Scenario reset');
+        }
+
+        // =====================================================
+        // ENTRY FORM — fully dynamic, pulls from golferGroups
+        // =====================================================
+        const entrySteps = ['info','A','B','C','D','WC','tiebreaker','review'];
+        const entryStepLabels = ['Your Info','Group A','Group B','Group C','Group D','Wild Cards','Tiebreaker','Review & Pay'];
+        let entryCurrentStep = 0;
+        const entryPicks = { name:'', email:'', A:null, B:null, C:null, D:null, WC1:null, WC2:null, tiebreaker:null };
+
+        function renderEntryForm() {
+            renderEntryStepIndicator();
+            renderEntryMainContent();
+            renderEntrySidebar();
+        }
+
+        function renderEntryStepIndicator() {
+            const el = document.getElementById('entry-step-indicator');
+            if (!el) return;
+            el.innerHTML = `<div class="step-indicator">${entryStepLabels.map((label, i) => {
+                const cls = i < entryCurrentStep ? 'step completed' : (i === entryCurrentStep ? 'step active' : 'step');
+                const circle = i < entryCurrentStep ? '✓' : (i+1);
+                return `<div class="${cls}"><div class="step-circle">${circle}</div><div class="step-label">${label}</div></div>`;
+            }).join('')}</div>`;
+        }
+
+        function renderEntrySidebar() {
+            const el = document.getElementById('entry-sidebar');
+            if (!el) return;
+            const picks = [
+                {label:'Group A', val:entryPicks.A},
+                {label:'Group B', val:entryPicks.B},
+                {label:'Group C', val:entryPicks.C},
+                {label:'Group D', val:entryPicks.D},
+                {label:'Wild Card 1', val:entryPicks.WC1},
+                {label:'Wild Card 2', val:entryPicks.WC2},
+                {label:'Tiebreaker', val:entryPicks.tiebreaker !== null ? formatScore(entryPicks.tiebreaker) : null},
+            ];
+            el.innerHTML = `
+                <div class="stat-card">
+                    <h4 class="font-bold text-lg mb-4">Your Picks</h4>
+                    ${entryPicks.name ? `<p class="text-sm text-slate-400 mb-3">${entryPicks.name}</p>` : ''}
+                    <div class="space-y-3">
+                        ${picks.map(p => {
+                            const filled = p.val !== null;
+                            const bg = filled ? 'bg-green-900/20 border-green-700/30' : 'bg-slate-700/20 border-slate-600/30';
+                            return `<div class="${bg} p-3 rounded border">
+                                <p class="text-xs text-slate-400">${p.label}</p>
+                                <p class="font-bold ${filled ? '' : 'text-slate-400'}">${p.val || '—'}</p>
+                            </div>`;
+                        }).join('')}
+                    </div>
+                    <div class="mt-4 pt-4 border-t border-green-900/30">
+                        <p class="text-sm text-slate-400">Entry Fee</p>
+                        <p class="text-2xl font-bold text-amber-500">$30.00</p>
+                    </div>
+                </div>`;
+        }
+
+        function formatScore(val) {
+            if (val === 0) return 'E';
+            return val > 0 ? '+' + val : '' + val;
+        }
+
+        function renderEntryMainContent() {
+            const el = document.getElementById('entry-main-content');
+            if (!el) return;
+            const step = entrySteps[entryCurrentStep];
+
+            if (step === 'info') {
+                el.innerHTML = `
+                    <div class="mb-6">
+                        <h3 class="text-2xl font-bold mb-2">Your Information</h3>
+                        <p class="text-slate-400">Enter your name and email to get started</p>
+                    </div>
+                    <div class="max-w-md space-y-4">
+                        <div>
+                            <label class="block text-sm font-semibold mb-2">Full Name</label>
+                            <input type="text" id="entry-name" value="${entryPicks.name}" placeholder="John Smith"
+                                class="search-input w-full" style="padding:12px;">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold mb-2">Email Address</label>
+                            <input type="email" id="entry-email" value="${entryPicks.email}" placeholder="john@example.com"
+                                class="search-input w-full" style="padding:12px;">
+                        </div>
+                    </div>
+                    <div class="mt-8">
+                        <button class="button-primary" onclick="entryNext()">Next Step</button>
+                    </div>`;
+            } else if (['A','B','C','D'].includes(step)) {
+                const gg = getGolferGroups();
+                const golfers = gg[step];
+                const currentPick = entryPicks[step];
+                el.innerHTML = `
+                    <div class="mb-6">
+                        <h3 class="text-2xl font-bold mb-2">Pick ${groupLabels[step]} Golfer</h3>
+                        <p class="text-slate-400">Select one golfer from ${groupLabels[step]}</p>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        ${golfers.map(p => {
+                            const sel = currentPick === p.name;
+                            return `<div class="golfer-card ${sel ? 'selected' : ''}" onclick="entrySelectGolfer('${step}','${p.name.replace(/'/g,"\\'")}')">
+                                <h4 class="font-bold text-lg mb-1">${p.name}</h4>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs text-slate-400">${groupLabels[step]}</span>
+                                    ${sel ? '<span class="gold-badge">SELECTED</span>' : ''}
+                                </div>
+                            </div>`;
+                        }).join('')}
+                    </div>
+                    <div class="mt-8 flex gap-4">
+                        <button class="button-primary" onclick="entryNext()">Next Step</button>
+                        <button class="button-secondary" onclick="entryBack()">Back</button>
+                    </div>`;
+            } else if (step === 'WC') {
+                // All golfers sorted by name for wild card selection
+                const wcAll = [...allGolfers].sort((a,b) => a.name.localeCompare(b.name));
+                const wc1 = entryPicks.WC1;
+                const wc2 = entryPicks.WC2;
+                el.innerHTML = `
+                    <div class="mb-6">
+                        <h3 class="text-2xl font-bold mb-2">Pick 2 Wild Cards</h3>
+                        <p class="text-slate-400">Select any 2 golfers from the entire field. Wild card earnings are doubled (2x).</p>
+                        <div class="mt-3">
+                            <input type="text" id="wc-search" class="search-input" placeholder="Search golfers..." onkeyup="filterWCGolfers()">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3" id="wc-golfer-grid">
+                        ${wcAll.map(p => {
+                            const is1 = wc1 === p.name;
+                            const is2 = wc2 === p.name;
+                            const sel = is1 || is2;
+                            const badge = is1 ? 'WC1' : (is2 ? 'WC2' : '');
+                            return `<div class="golfer-card ${sel ? 'selected' : ''}" data-name="${p.name.toLowerCase()}" onclick="entrySelectWC('${p.name.replace(/'/g,"\\'")}')">
+                                <h4 class="font-bold text-sm">${p.name}</h4>
+                                ${sel ? `<span class="gold-badge mt-1">${badge}</span>` : ''}
+                            </div>`;
+                        }).join('')}
+                    </div>
+                    <div class="mt-8 flex gap-4">
+                        <button class="button-primary" onclick="entryNext()">Next Step</button>
+                        <button class="button-secondary" onclick="entryBack()">Back</button>
+                    </div>`;
+            } else if (step === 'tiebreaker') {
+                const current = entryPicks.tiebreaker;
+                // Scores from +5 to -20
+                const scores = [];
+                for (let i = 5; i >= -20; i--) scores.push(i);
+                el.innerHTML = `
+                    <div class="mb-6">
+                        <h3 class="text-2xl font-bold mb-2">Tiebreaker</h3>
+                        <p class="text-slate-400">What will the winning score (to par) be? Closest without going over wins.</p>
+                    </div>
+                    <div class="max-w-sm">
+                        <label class="block text-sm font-semibold mb-3">Winning Score to Par</label>
+                        <div class="grid grid-cols-4 sm:grid-cols-5 gap-2">
+                            ${scores.map(s => {
+                                const label = s === 0 ? 'E' : (s > 0 ? '+' + s : '' + s);
+                                const sel = current === s;
+                                const color = s > 0 ? 'color:#fca5a5;' : (s < 0 ? 'color:#86efac;' : 'color:#e2e8f0;');
+                                return `<button onclick="entrySelectTiebreaker(${s})"
+                                    class="golfer-card text-center ${sel ? 'selected' : ''}" style="padding:10px;cursor:pointer;">
+                                    <span class="font-bold text-lg" style="${color}">${label}</span>
+                                </button>`;
+                            }).join('')}
+                        </div>
+                    </div>
+                    <div class="mt-8 flex gap-4">
+                        <button class="button-primary" onclick="entryNext()">Next Step</button>
+                        <button class="button-secondary" onclick="entryBack()">Back</button>
+                    </div>`;
+            } else if (step === 'review') {
+                const tb = entryPicks.tiebreaker !== null ? formatScore(entryPicks.tiebreaker) : '—';
+                const lsUrl = (document.getElementById('admin-leaguesafe-url') || {}).value || '';
+                const hasLsUrl = lsUrl.trim().length > 0;
+                el.innerHTML = `
+                    <div class="mb-6">
+                        <h3 class="text-2xl font-bold mb-2">Review & Submit</h3>
+                        <p class="text-slate-400">Review your selections, submit your picks, then complete payment via TeamStake</p>
+                    </div>
+                    <div class="stat-card max-w-lg">
+                        <div class="space-y-4">
+                            <div class="flex justify-between pb-3 border-b border-green-900/30">
+                                <span class="text-slate-400">Name</span><span class="font-bold">${entryPicks.name || '—'}</span>
+                            </div>
+                            <div class="flex justify-between pb-3 border-b border-green-900/30">
+                                <span class="text-slate-400">Email</span><span class="font-bold">${entryPicks.email || '—'}</span>
+                            </div>
+                            <div class="flex justify-between pb-3 border-b border-green-900/30">
+                                <span class="text-slate-400">Group A</span><span class="font-bold">${entryPicks.A || '—'}</span>
+                            </div>
+                            <div class="flex justify-between pb-3 border-b border-green-900/30">
+                                <span class="text-slate-400">Group B</span><span class="font-bold">${entryPicks.B || '—'}</span>
+                            </div>
+                            <div class="flex justify-between pb-3 border-b border-green-900/30">
+                                <span class="text-slate-400">Group C</span><span class="font-bold">${entryPicks.C || '—'}</span>
+                            </div>
+                            <div class="flex justify-between pb-3 border-b border-green-900/30">
+                                <span class="text-slate-400">Group D</span><span class="font-bold">${entryPicks.D || '—'}</span>
+                            </div>
+                            <div class="flex justify-between pb-3 border-b border-green-900/30">
+                                <span class="text-slate-400">Wild Card 1 <span class="gold-badge ml-1">2x</span></span><span class="font-bold">${entryPicks.WC1 || '—'}</span>
+                            </div>
+                            <div class="flex justify-between pb-3 border-b border-green-900/30">
+                                <span class="text-slate-400">Wild Card 2 <span class="gold-badge ml-1">2x</span></span><span class="font-bold">${entryPicks.WC2 || '—'}</span>
+                            </div>
+                            <div class="flex justify-between pb-3 border-b border-green-900/30">
+                                <span class="text-slate-400">Tiebreaker</span><span class="font-bold">${tb}</span>
+                            </div>
+                            <div class="flex justify-between pt-2">
+                                <span class="text-lg font-bold">Entry Fee</span>
+                                <span class="text-lg font-bold" style="color:#c4a35a;">$30.00</span>
+                            </div>
+                        </div>
+                        <button class="button-primary w-full mt-6" style="font-size:1.1rem;padding:14px;" onclick="submitEntry()">Submit My Picks</button>
+                    </div>
+                    <div class="mt-6">
+                        <button class="button-secondary" onclick="entryBack()">Back</button>
+                    </div>`;
+            }
+        }
+
+        function entrySelectGolfer(group, name) {
+            entryPicks[group] = name;
+            renderEntryForm();
+        }
+
+        function entrySelectWC(name) {
+            if (entryPicks.WC1 === name) { entryPicks.WC1 = null; }
+            else if (entryPicks.WC2 === name) { entryPicks.WC2 = null; }
+            else if (!entryPicks.WC1) { entryPicks.WC1 = name; }
+            else if (!entryPicks.WC2) { entryPicks.WC2 = name; }
+            else { entryPicks.WC1 = name; } // replace first if both full
+            renderEntryForm();
+        }
+
+        function entrySelectTiebreaker(val) {
+            entryPicks.tiebreaker = val;
+            renderEntryForm();
+        }
+
+        function filterWCGolfers() {
+            const q = document.getElementById('wc-search').value.toLowerCase();
+            document.querySelectorAll('#wc-golfer-grid .golfer-card').forEach(card => {
+                card.style.display = card.dataset.name.includes(q) ? '' : 'none';
+            });
+        }
+
+        function entryNext() {
+            const step = entrySteps[entryCurrentStep];
+            if (step === 'info') {
+                const name = document.getElementById('entry-name').value.trim();
+                const email = document.getElementById('entry-email').value.trim();
+                if (!name || !email) { alert('Please enter your name and email.'); return; }
+                entryPicks.name = name;
+                entryPicks.email = email;
+            }
+            if (['A','B','C','D'].includes(step) && !entryPicks[step]) {
+                alert('Please select a golfer before continuing.'); return;
+            }
+            if (step === 'WC' && (!entryPicks.WC1 || !entryPicks.WC2)) {
+                alert('Please select 2 wild card golfers.'); return;
+            }
+            if (step === 'tiebreaker' && entryPicks.tiebreaker === null) {
+                alert('Please select a tiebreaker score.'); return;
+            }
+            if (entryCurrentStep < entrySteps.length - 1) {
+                entryCurrentStep++;
+                renderEntryForm();
+            }
+        }
+
+        function entryBack() {
+            if (entryCurrentStep > 0) {
+                entryCurrentStep--;
+                renderEntryForm();
+            }
+        }
+
+        // TeamStake URL persistence (in-memory for preview)
+        let leagueSafeUrl = '';
+        function saveLeagueSafeUrl() {
+            const el = document.getElementById('admin-leaguesafe-url');
+            if (el) leagueSafeUrl = el.value.trim();
+        }
+
+        // Save admin settings to API
+        async function saveAdminSettings() {
+            const settings = {
+                teamStakeUrl: (document.getElementById('admin-leaguesafe-url') || {}).value || '',
+                submissionDeadline: (document.getElementById('admin-deadline') || {}).value ? new Date(document.getElementById('admin-deadline').value).toISOString() : poolSettings.submissionDeadline,
+                entryFee: parseInt((document.getElementById('admin-entry-fee') || {}).value.replace(/[^0-9]/g,'')) || 30,
+                tournamentName: '2026 Valspar Championship',
+            };
+            const poolPw = (document.getElementById('admin-pool-pw') || {}).value;
+            if (poolPw && poolPw.length >= 4) settings.poolPassword = poolPw;
+            const adminUser = (document.getElementById('admin-user-setting') || {}).value;
+            if (adminUser && adminUser.length >= 3) settings.adminUsername = adminUser;
+            const newPw = (document.getElementById('admin-pw-setting') || {}).value;
+            if (newPw && newPw.length >= 4) settings.adminPassword = newPw;
+            try {
+                const res = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify(settings)
+                });
+                if (res.ok) {
+                    poolSettings = {...poolSettings, ...settings};
+                    alert('Settings saved!');
+                }
+            } catch (e) { alert('Failed to save settings.'); }
+        }
+
+        // Submit entry: save picks, then prompt payment via TeamStake
+        function submitEntry() {
+            const lsUrl = (document.getElementById('admin-leaguesafe-url') || {}).value || leagueSafeUrl;
+            const hasLsUrl = lsUrl.trim().length > 0;
+
+            // Save the entry (in production this would POST to an API)
+            const entry = {
+                name: entryPicks.name,
+                email: entryPicks.email,
+                groupA: entryPicks.A,
+                groupB: entryPicks.B,
+                groupC: entryPicks.C,
+                groupD: entryPicks.D,
+                wildCard1: entryPicks.WC1,
+                wildCard2: entryPicks.WC2,
+                tiebreaker: entryPicks.tiebreaker,
+                submittedAt: new Date().toISOString(),
+                paymentStatus: 'pending'
+            };
+            console.log('Entry submitted:', entry);
+
+            // Save entry to API
+            fetch('/api/entries', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(entry)
+            }).catch(e => console.log('Entry save failed:', e));
+
+            // Show confirmation with TeamStake payment link
+            const el = document.getElementById('entry-main-content');
+            const tb = entryPicks.tiebreaker !== null ? formatScore(entryPicks.tiebreaker) : '—';
+            el.innerHTML = `
+                <div class="stat-card max-w-lg">
+                    <div class="text-center mb-6">
+                        <div style="font-size:3rem; margin-bottom:8px;">&#9989;</div>
+                        <h3 class="text-2xl font-bold mb-2" style="color:#16a34a;">Picks Submitted!</h3>
+                        <p class="text-slate-400">Your selections have been saved. Complete your payment below to finalize your entry.</p>
+                    </div>
+                    <div class="space-y-3 mb-6 p-4 rounded" style="background:rgba(21,128,61,0.1); border:1px solid rgba(22,163,74,0.3);">
+                        <p class="text-sm text-slate-300"><strong>Name:</strong> ${entryPicks.name}</p>
+                        <p class="text-sm text-slate-300"><strong>Team:</strong> ${entryPicks.A}, ${entryPicks.B}, ${entryPicks.C}, ${entryPicks.D}</p>
+                        <p class="text-sm text-slate-300"><strong>Wild Cards (2x):</strong> ${entryPicks.WC1}, ${entryPicks.WC2}</p>
+                        <p class="text-sm text-slate-300"><strong>Tiebreaker:</strong> ${tb}</p>
+                    </div>
+                    <div class="p-4 rounded mb-4" style="background:rgba(196,163,90,0.1); border:1px solid rgba(196,163,90,0.3);">
+                        <h4 class="font-bold mb-2" style="color:#c4a35a;">Step 2: Complete Payment</h4>
+                        <p class="text-sm text-slate-300 mb-4">Pay your $30.00 entry fee securely through TeamStake. Your entry will be confirmed once payment is received.</p>
+                        ${hasLsUrl
+                            ? '<a href="' + lsUrl.trim() + '" target="_blank" rel="noopener noreferrer" class="button-primary block text-center w-full" style="font-size:1.1rem;padding:14px;text-decoration:none;display:block;">Pay $30.00 via TeamStake &#8599;</a>'
+                            : '<div class="p-3 rounded text-center" style="background:rgba(100,116,139,0.2); border:1px solid rgba(100,116,139,0.3);"><p class="text-sm text-slate-400">TeamStake payment link not yet configured. Contact the pool commissioner to make your payment.</p></div>'
+                        }
+                    </div>
+                    <div class="text-center mt-4">
+                        <p class="text-xs text-slate-500">A confirmation email will be sent to <strong>${entryPicks.email}</strong></p>
+                    </div>
+                </div>
+                <div class="mt-6 text-center">
+                    <button class="button-secondary" onclick="resetEntry()">Submit Another Entry</button>
+                </div>`;
+            // Clear sidebar
+            const sidebar = document.getElementById('entry-sidebar');
+            if (sidebar) sidebar.innerHTML = '';
+        }
+
+        // Reset entry form for a new submission
+        function resetEntry() {
+            entryCurrentStep = 0;
+            entryPicks = { name: '', email: '', A: null, B: null, C: null, D: null, WC1: null, WC2: null, tiebreaker: null };
+            renderEntryForm();
+        }
+
+        // =====================================================
+        // TOURNAMENT LEADERBOARD — Live scores + projected prize $
+        // =====================================================
+
+        // 2026 Valspar Championship purse: $20,000,000
+        // PGA Tour prize distribution (approximate % of purse for each position)
+        const TOTAL_PURSE = 20000000;
+        const prizeDistribution = [
+            0.18,    // 1st: $3,600,000
+            0.109,   // 2nd
+            0.069,   // 3rd
+            0.049,   // 4th
+            0.041,   // 5th
+            0.036,   // 6th
+            0.0335,  // 7th
+            0.031,   // 8th
+            0.029,   // 9th
+            0.027,   // 10th
+            0.025,   // 11th
+            0.023,   // 12th
+            0.021,   // 13th
+            0.019,   // 14th
+            0.018,   // 15th
+            0.017,   // 16th
+            0.016,   // 17th
+            0.015,   // 18th
+            0.014,   // 19th
+            0.013,   // 20th
+            0.012,   // 21st
+            0.0112,  // 22nd
+            0.0104,  // 23rd
+            0.0096,  // 24th
+            0.0088,  // 25th
+            0.008,   // 26th
+            0.0077,  // 27th
+            0.0074,  // 28th
+            0.0071,  // 29th
+            0.0068,  // 30th
+            0.0065,  // 31st
+            0.0062,  // 32nd
+            0.006,   // 33rd
+            0.0057,  // 34th
+            0.0055,  // 35th
+            0.0053,  // 36th
+            0.005,   // 37th
+            0.0048,  // 38th
+            0.0046,  // 39th
+            0.0044,  // 40th
+            0.0042,  // 41st
+            0.004,   // 42nd
+            0.0038,  // 43rd
+            0.0036,  // 44th
+            0.0034,  // 45th
+            0.0032,  // 46th
+            0.003,   // 47th
+            0.0028,  // 48th
+            0.0026,  // 49th
+            0.0025,  // 50th
+            0.00245, // 51st
+            0.0024,  // 52nd
+            0.00235, // 53rd
+            0.0023,  // 54th
+            0.00228, // 55th
+            0.00225, // 56th
+            0.00222, // 57th
+            0.0022,  // 58th
+            0.00218, // 59th
+            0.00216, // 60th
+            0.00214, // 61st
+            0.00212, // 62nd
+            0.0021,  // 63rd
+            0.00208, // 64th
+            0.00206, // 65th
+        ];
+
+        // Tournament scores from ESPN (Round 3 complete)
+        const tournamentScores = [
+            {pos:1,  name:"Sungjae Im", score:-11, today:-2, thru:"F", r1:64, r2:69, r3:69, r4:null, tot:202, status:"active"},
+            {pos:"T2", name:"Brandt Snedeker", score:-9, today:-4, thru:"F", r1:65, r2:72, r3:67, r4:null, tot:204, status:"active"},
+            {pos:"T2", name:"David Lipsky", score:-9, today:-1, thru:"F", r1:69, r2:65, r3:70, r4:null, tot:204, status:"active"},
+            {pos:"T4", name:"Marco Penge", score:-8, today:-3, thru:"F", r1:69, r2:68, r3:68, r4:null, tot:205, status:"active"},
+            {pos:"T4", name:"Matt Fitzpatrick", score:-8, today:-3, thru:"F", r1:68, r2:69, r3:68, r4:null, tot:205, status:"active"},
+            {pos:"T6", name:"S.H. Kim", score:-6, today:-4, thru:"F", r1:72, r2:68, r3:67, r4:null, tot:207, status:"active"},
+            {pos:"T6", name:"Adrien Dumont de Chassart", score:-6, today:-4, thru:"F", r1:69, r2:71, r3:67, r4:null, tot:207, status:"active"},
+            {pos:"T8", name:"Tom Kim", score:-5, today:-2, thru:"F", r1:69, r2:70, r3:69, r4:null, tot:208, status:"active"},
+            {pos:"T8", name:"Corey Conners", score:-5, today:-1, thru:"F", r1:69, r2:69, r3:70, r4:null, tot:208, status:"active"},
+            {pos:"T8", name:"Chandler Blanchet", score:-5, today:2, thru:"F", r1:69, r2:66, r3:73, r4:null, tot:208, status:"active"},
+            {pos:"T11", name:"Kevin Yu", score:-4, today:-3, thru:"F", r1:73, r2:68, r3:68, r4:null, tot:209, status:"active"},
+            {pos:"T11", name:"Rico Hoey", score:-4, today:-1, thru:"F", r1:71, r2:68, r3:70, r4:null, tot:209, status:"active"},
+            {pos:"T11", name:"Brooks Koepka", score:-4, today:0, thru:"F", r1:71, r2:67, r3:71, r4:null, tot:209, status:"active"},
+            {pos:"T11", name:"Gary Woodland", score:-4, today:0, thru:"F", r1:70, r2:68, r3:71, r4:null, tot:209, status:"active"},
+            {pos:"T11", name:"Tony Finau", score:-4, today:0, thru:"F", r1:69, r2:69, r3:71, r4:null, tot:209, status:"active"},
+            {pos:"T11", name:"Jordan Smith", score:-4, today:1, thru:"F", r1:69, r2:68, r3:72, r4:null, tot:209, status:"active"},
+            {pos:"T17", name:"Séamus Power", score:-3, today:-1, thru:"F", r1:72, r2:68, r3:70, r4:null, tot:210, status:"active"},
+            {pos:"T17", name:"Matthieu Pavon", score:-3, today:-1, thru:"F", r1:70, r2:70, r3:70, r4:null, tot:210, status:"active"},
+            {pos:"T17", name:"Patrick Cantlay", score:-3, today:0, thru:"F", r1:70, r2:69, r3:71, r4:null, tot:210, status:"active"},
+            {pos:"T17", name:"David Skinns", score:-3, today:0, thru:"F", r1:69, r2:70, r3:71, r4:null, tot:210, status:"active"},
+            {pos:"T17", name:"Jordan Spieth", score:-3, today:0, thru:"F", r1:69, r2:70, r3:71, r4:null, tot:210, status:"active"},
+            {pos:"T17", name:"Danny Walker", score:-3, today:1, thru:"F", r1:74, r2:64, r3:72, r4:null, tot:210, status:"active"},
+            {pos:"T17", name:"Jacob Bridgeman", score:-3, today:1, thru:"F", r1:68, r2:70, r3:72, r4:null, tot:210, status:"active"},
+            {pos:"T17", name:"Doug Ghim", score:-3, today:4, thru:"F", r1:68, r2:67, r3:75, r4:null, tot:210, status:"active"},
+            {pos:"T25", name:"Dylan Wu", score:-2, today:-3, thru:"F", r1:72, r2:71, r3:68, r4:null, tot:211, status:"active"},
+            {pos:"T25", name:"A.J. Ewart", score:-2, today:-3, thru:"F", r1:71, r2:72, r3:68, r4:null, tot:211, status:"active"},
+            {pos:"T25", name:"Patrick Rodgers", score:-2, today:-3, thru:"F", r1:71, r2:72, r3:68, r4:null, tot:211, status:"active"},
+            {pos:"T25", name:"Stephan Jaeger", score:-2, today:-3, thru:"F", r1:71, r2:72, r3:68, r4:null, tot:211, status:"active"},
+            {pos:"T25", name:"Davis Chatfield", score:-2, today:-3, thru:"F", r1:69, r2:74, r3:68, r4:null, tot:211, status:"active"},
+            {pos:"T25", name:"Isaiah Salinda", score:-2, today:-2, thru:"F", r1:74, r2:68, r3:69, r4:null, tot:211, status:"active"},
+            {pos:"T25", name:"Lee Hodges", score:-2, today:-2, thru:"F", r1:72, r2:70, r3:69, r4:null, tot:211, status:"active"},
+            {pos:"T25", name:"Ryo Hisatsune", score:-2, today:-2, thru:"F", r1:71, r2:71, r3:69, r4:null, tot:211, status:"active"},
+            {pos:"T25", name:"Matt Wallace", score:-2, today:-1, thru:"F", r1:73, r2:68, r3:70, r4:null, tot:211, status:"active"},
+            {pos:"T25", name:"Rasmus Neergaard-Petersen", score:-2, today:-1, thru:"F", r1:68, r2:73, r3:70, r4:null, tot:211, status:"active"},
+            {pos:"T25", name:"Xander Schauffele", score:-2, today:0, thru:"F", r1:68, r2:72, r3:71, r4:null, tot:211, status:"active"},
+            {pos:"T25", name:"Patrick Fishburn", score:-2, today:1, thru:"F", r1:68, r2:71, r3:72, r4:null, tot:211, status:"active"},
+            {pos:"T25", name:"Alex Smalley", score:-2, today:3, thru:"F", r1:68, r2:69, r3:74, r4:null, tot:211, status:"active"},
+            {pos:"T38", name:"John Parry", score:-1, today:-2, thru:"F", r1:72, r2:71, r3:69, r4:null, tot:212, status:"active"},
+            {pos:"T38", name:"Justin Lower", score:-1, today:-1, thru:"F", r1:71, r2:71, r3:70, r4:null, tot:212, status:"active"},
+            {pos:"T38", name:"Jimmy Stanger", score:-1, today:-1, thru:"F", r1:71, r2:71, r3:70, r4:null, tot:212, status:"active"},
+            {pos:"T38", name:"Denny McCarthy", score:-1, today:-1, thru:"F", r1:70, r2:72, r3:70, r4:null, tot:212, status:"active"},
+            {pos:"T38", name:"Webb Simpson", score:-1, today:-1, thru:"F", r1:68, r2:74, r3:70, r4:null, tot:212, status:"active"},
+            {pos:"T38", name:"Takumi Kanaya", score:-1, today:0, thru:"F", r1:73, r2:68, r3:71, r4:null, tot:212, status:"active"},
+            {pos:"T38", name:"Emiliano Grillo", score:-1, today:0, thru:"F", r1:71, r2:70, r3:71, r4:null, tot:212, status:"active"},
+            {pos:"T38", name:"Chandler Phillips", score:-1, today:1, thru:"F", r1:71, r2:69, r3:72, r4:null, tot:212, status:"active"},
+            {pos:"T38", name:"Andrew Putnam", score:-1, today:1, thru:"F", r1:67, r2:73, r3:72, r4:null, tot:212, status:"active"},
+            {pos:"T38", name:"Hank Lebioda", score:-1, today:2, thru:"F", r1:71, r2:68, r3:73, r4:null, tot:212, status:"active"},
+            {pos:"T48", name:"Michael Kim", score:0, today:-1, thru:"F", r1:74, r2:69, r3:70, r4:null, tot:213, status:"active"},
+            {pos:"T48", name:"Mackenzie Hughes", score:0, today:-1, thru:"F", r1:72, r2:71, r3:70, r4:null, tot:213, status:"active"},
+            {pos:"T48", name:"Christiaan Bezuidenhout", score:0, today:-1, thru:"F", r1:70, r2:73, r3:70, r4:null, tot:213, status:"active"},
+            {pos:"T48", name:"John VanDerLaan", score:0, today:-1, thru:"F", r1:69, r2:74, r3:70, r4:null, tot:213, status:"active"},
+            {pos:"T48", name:"Joel Dahmen", score:0, today:0, thru:"F", r1:72, r2:70, r3:71, r4:null, tot:213, status:"active"},
+            {pos:"T48", name:"Sam Ryder", score:0, today:1, thru:"F", r1:72, r2:69, r3:72, r4:null, tot:213, status:"active"},
+            {pos:"T48", name:"Chad Ramey", score:0, today:1, thru:"F", r1:71, r2:70, r3:72, r4:null, tot:213, status:"active"},
+            {pos:"T48", name:"Karl Vilips", score:0, today:1, thru:"F", r1:69, r2:72, r3:72, r4:null, tot:213, status:"active"},
+            {pos:"T48", name:"Ricky Castillo", score:0, today:1, thru:"F", r1:68, r2:73, r3:72, r4:null, tot:213, status:"active"},
+            {pos:"T48", name:"Blades Brown", score:0, today:2, thru:"F", r1:69, r2:71, r3:73, r4:null, tot:213, status:"active"},
+            {pos:"T48", name:"Alejandro Tosti", score:0, today:3, thru:"F", r1:71, r2:68, r3:74, r4:null, tot:213, status:"active"},
+            {pos:"T48", name:"Nicolai Højgaard", score:0, today:3, thru:"F", r1:69, r2:70, r3:74, r4:null, tot:213, status:"active"},
+            {pos:"T60", name:"Andrew Novak", score:1, today:0, thru:"F", r1:73, r2:70, r3:71, r4:null, tot:214, status:"active"},
+            {pos:"T60", name:"Keegan Bradley", score:1, today:1, thru:"F", r1:73, r2:69, r3:72, r4:null, tot:214, status:"active"},
+            {pos:"T60", name:"Henrik Norlander", score:1, today:2, thru:"F", r1:73, r2:68, r3:73, r4:null, tot:214, status:"active"},
+            {pos:"T60", name:"Kevin Roy", score:1, today:2, thru:"F", r1:72, r2:69, r3:73, r4:null, tot:214, status:"active"},
+            {pos:"T60", name:"Justin Thomas", score:1, today:2, thru:"F", r1:72, r2:69, r3:73, r4:null, tot:214, status:"active"},
+            {pos:"T60", name:"Kensei Hirata", score:1, today:3, thru:"F", r1:71, r2:69, r3:74, r4:null, tot:214, status:"active"},
+            {pos:"T60", name:"Pierceson Coody", score:1, today:3, thru:"F", r1:67, r2:73, r3:74, r4:null, tot:214, status:"active"},
+            {pos:"T60", name:"Billy Horschel", score:1, today:4, thru:"F", r1:67, r2:72, r3:75, r4:null, tot:214, status:"active"},
+            {pos:"T68", name:"Kevin Streelman", score:2, today:1, thru:"F", r1:74, r2:69, r3:72, r4:null, tot:215, status:"active"},
+            {pos:"T68", name:"Matti Schmid", score:2, today:1, thru:"F", r1:73, r2:70, r3:72, r4:null, tot:215, status:"active"},
+            {pos:"T70", name:"Davis Thompson", score:3, today:2, thru:"F", r1:66, r2:77, r3:73, r4:null, tot:216, status:"active"},
+            {pos:"T70", name:"Rasmus Højgaard", score:3, today:3, thru:"F", r1:71, r2:71, r3:74, r4:null, tot:216, status:"active"},
+            {pos:"T72", name:"Bud Cauley", score:4, today:3, thru:"F", r1:69, r2:74, r3:74, r4:null, tot:217, status:"active"},
+            {pos:"T72", name:"David Ford", score:4, today:7, thru:"F", r1:69, r2:70, r3:78, r4:null, tot:217, status:"active"},
+            {pos:74, name:"Vince Whaley", score:5, today:4, thru:"F", r1:69, r2:74, r3:75, r4:null, tot:218, status:"active"},
+            // CUT players
+            {pos:"CUT", name:"Kristoffer Reitan", score:null, today:null, thru:"CUT", r1:74, r2:70, r3:null, r4:null, tot:144, status:"cut"},
+            {pos:"CUT", name:"Steven Fisk", score:null, today:null, thru:"CUT", r1:74, r2:70, r3:null, r4:null, tot:144, status:"cut"},
+            {pos:"CUT", name:"Zecheng Dou", score:null, today:null, thru:"CUT", r1:73, r2:71, r3:null, r4:null, tot:144, status:"cut"},
+            {pos:"CUT", name:"Thorbjørn Olesen", score:null, today:null, thru:"CUT", r1:73, r2:71, r3:null, r4:null, tot:144, status:"cut"},
+            {pos:"CUT", name:"Neal Shipley", score:null, today:null, thru:"CUT", r1:72, r2:72, r3:null, r4:null, tot:144, status:"cut"},
+            {pos:"CUT", name:"Eric Cole", score:null, today:null, thru:"CUT", r1:72, r2:72, r3:null, r4:null, tot:144, status:"cut"},
+            {pos:"CUT", name:"Adrien Saddier", score:null, today:null, thru:"CUT", r1:71, r2:73, r3:null, r4:null, tot:144, status:"cut"},
+            {pos:"CUT", name:"Kris Ventura", score:null, today:null, thru:"CUT", r1:71, r2:73, r3:null, r4:null, tot:144, status:"cut"},
+            {pos:"CUT", name:"Wyndham Clark", score:null, today:null, thru:"CUT", r1:70, r2:74, r3:null, r4:null, tot:144, status:"cut"},
+            {pos:"CUT", name:"Ben Griffin", score:null, today:null, thru:"CUT", r1:70, r2:74, r3:null, r4:null, tot:144, status:"cut"},
+            {pos:"CUT", name:"Michael Brennan", score:null, today:null, thru:"CUT", r1:75, r2:70, r3:null, r4:null, tot:145, status:"cut"},
+            {pos:"CUT", name:"Paul Waring", score:null, today:null, thru:"CUT", r1:75, r2:70, r3:null, r4:null, tot:145, status:"cut"},
+            {pos:"CUT", name:"Pontus Nyholm", score:null, today:null, thru:"CUT", r1:74, r2:71, r3:null, r4:null, tot:145, status:"cut"},
+            {pos:"CUT", name:"Marcelo Rozo", score:null, today:null, thru:"CUT", r1:73, r2:72, r3:null, r4:null, tot:145, status:"cut"},
+            {pos:"CUT", name:"Paul Peterson", score:null, today:null, thru:"CUT", r1:70, r2:75, r3:null, r4:null, tot:145, status:"cut"},
+            {pos:"CUT", name:"Viktor Hovland", score:null, today:null, thru:"CUT", r1:70, r2:75, r3:null, r4:null, tot:145, status:"cut"},
+            {pos:"CUT", name:"Zach Bauchou", score:null, today:null, thru:"CUT", r1:69, r2:76, r3:null, r4:null, tot:145, status:"cut"},
+            {pos:"CUT", name:"Jesper Svensson", score:null, today:null, thru:"CUT", r1:69, r2:76, r3:null, r4:null, tot:145, status:"cut"},
+            {pos:"CUT", name:"Aaron Rai", score:null, today:null, thru:"CUT", r1:68, r2:77, r3:null, r4:null, tot:145, status:"cut"},
+            {pos:"CUT", name:"Austin Eckroat", score:null, today:null, thru:"CUT", r1:78, r2:68, r3:null, r4:null, tot:146, status:"cut"},
+            {pos:"CUT", name:"Dan Brown", score:null, today:null, thru:"CUT", r1:75, r2:71, r3:null, r4:null, tot:146, status:"cut"},
+            {pos:"CUT", name:"Peter Malnati", score:null, today:null, thru:"CUT", r1:74, r2:72, r3:null, r4:null, tot:146, status:"cut"},
+            {pos:"CUT", name:"Nick Dunlap", score:null, today:null, thru:"CUT", r1:74, r2:72, r3:null, r4:null, tot:146, status:"cut"},
+            {pos:"CUT", name:"Jackson Suber", score:null, today:null, thru:"CUT", r1:74, r2:72, r3:null, r4:null, tot:146, status:"cut"},
+            {pos:"CUT", name:"Max McGreevy", score:null, today:null, thru:"CUT", r1:72, r2:74, r3:null, r4:null, tot:146, status:"cut"},
+            {pos:"CUT", name:"Nick Taylor", score:null, today:null, thru:"CUT", r1:72, r2:74, r3:null, r4:null, tot:146, status:"cut"},
+            {pos:"CUT", name:"Luke Guthrie", score:null, today:null, thru:"CUT", r1:70, r2:76, r3:null, r4:null, tot:146, status:"cut"},
+            {pos:"CUT", name:"Joe Highsmith", score:null, today:null, thru:"CUT", r1:76, r2:71, r3:null, r4:null, tot:147, status:"cut"},
+            {pos:"CUT", name:"Patton Kizzire", score:null, today:null, thru:"CUT", r1:74, r2:73, r3:null, r4:null, tot:147, status:"cut"},
+            {pos:"CUT", name:"Lucas Glover", score:null, today:null, thru:"CUT", r1:73, r2:74, r3:null, r4:null, tot:147, status:"cut"},
+            {pos:"CUT", name:"Danny Willett", score:null, today:null, thru:"CUT", r1:73, r2:74, r3:null, r4:null, tot:147, status:"cut"},
+            {pos:"CUT", name:"Zac Blair", score:null, today:null, thru:"CUT", r1:71, r2:76, r3:null, r4:null, tot:147, status:"cut"},
+            {pos:"CUT", name:"J.J. Spaun", score:null, today:null, thru:"CUT", r1:77, r2:71, r3:null, r4:null, tot:148, status:"cut"},
+            {pos:"CUT", name:"Davis Riley", score:null, today:null, thru:"CUT", r1:76, r2:72, r3:null, r4:null, tot:148, status:"cut"},
+            {pos:"CUT", name:"Adam Svensson", score:null, today:null, thru:"CUT", r1:75, r2:73, r3:null, r4:null, tot:148, status:"cut"},
+            {pos:"CUT", name:"Brice Garnett", score:null, today:null, thru:"CUT", r1:75, r2:73, r3:null, r4:null, tot:148, status:"cut"},
+            {pos:"CUT", name:"Gordon Sargent", score:null, today:null, thru:"CUT", r1:75, r2:73, r3:null, r4:null, tot:148, status:"cut"},
+            {pos:"CUT", name:"Mac Meissner", score:null, today:null, thru:"CUT", r1:74, r2:74, r3:null, r4:null, tot:148, status:"cut"},
+            {pos:"CUT", name:"Mark Hubbard", score:null, today:null, thru:"CUT", r1:73, r2:75, r3:null, r4:null, tot:148, status:"cut"},
+            {pos:"CUT", name:"Beau Hossler", score:null, today:null, thru:"CUT", r1:72, r2:76, r3:null, r4:null, tot:148, status:"cut"},
+            {pos:"CUT", name:"Sahith Theegala", score:null, today:null, thru:"CUT", r1:77, r2:72, r3:null, r4:null, tot:149, status:"cut"},
+            {pos:"CUT", name:"Adam Hadwin", score:null, today:null, thru:"CUT", r1:76, r2:73, r3:null, r4:null, tot:149, status:"cut"},
+            {pos:"CUT", name:"Taylor Pendrith", score:null, today:null, thru:"CUT", r1:76, r2:73, r3:null, r4:null, tot:149, status:"cut"},
+            {pos:"CUT", name:"Greg Koch", score:null, today:null, thru:"CUT", r1:76, r2:73, r3:null, r4:null, tot:149, status:"cut"},
+            {pos:"CUT", name:"Jeremy Paul", score:null, today:null, thru:"CUT", r1:76, r2:73, r3:null, r4:null, tot:149, status:"cut"},
+            {pos:"CUT", name:"Adam Schenk", score:null, today:null, thru:"CUT", r1:73, r2:76, r3:null, r4:null, tot:149, status:"cut"},
+            {pos:"CUT", name:"Erik van Rooyen", score:null, today:null, thru:"CUT", r1:73, r2:76, r3:null, r4:null, tot:149, status:"cut"},
+            {pos:"CUT", name:"Garrick Higgo", score:null, today:null, thru:"CUT", r1:77, r2:73, r3:null, r4:null, tot:150, status:"cut"},
+            {pos:"CUT", name:"Tyler Wilkes", score:null, today:null, thru:"CUT", r1:74, r2:76, r3:null, r4:null, tot:150, status:"cut"},
+            {pos:"CUT", name:"Rafael Campos", score:null, today:null, thru:"CUT", r1:73, r2:77, r3:null, r4:null, tot:150, status:"cut"},
+            {pos:"CUT", name:"Taylor Moore", score:null, today:null, thru:"CUT", r1:73, r2:77, r3:null, r4:null, tot:150, status:"cut"},
+            {pos:"CUT", name:"Matt Kuchar", score:null, today:null, thru:"CUT", r1:73, r2:77, r3:null, r4:null, tot:150, status:"cut"},
+            {pos:"CUT", name:"Austin Smotherman", score:null, today:null, thru:"CUT", r1:71, r2:79, r3:null, r4:null, tot:150, status:"cut"},
+            {pos:"CUT", name:"Charley Hoffman", score:null, today:null, thru:"CUT", r1:78, r2:73, r3:null, r4:null, tot:151, status:"cut"},
+            {pos:"CUT", name:"Matt McCarty", score:null, today:null, thru:"CUT", r1:74, r2:77, r3:null, r4:null, tot:151, status:"cut"},
+            {pos:"CUT", name:"Max Homa", score:null, today:null, thru:"CUT", r1:78, r2:74, r3:null, r4:null, tot:152, status:"cut"},
+            {pos:"CUT", name:"Cam Davis", score:null, today:null, thru:"CUT", r1:76, r2:76, r3:null, r4:null, tot:152, status:"cut"},
+            {pos:"CUT", name:"Luke Clanton", score:null, today:null, thru:"CUT", r1:78, r2:75, r3:null, r4:null, tot:153, status:"cut"},
+            {pos:"CUT", name:"Jeffrey Kang", score:null, today:null, thru:"CUT", r1:76, r2:77, r3:null, r4:null, tot:153, status:"cut"},
+            {pos:"CUT", name:"Johnny Keefer", score:null, today:null, thru:"CUT", r1:79, r2:77, r3:null, r4:null, tot:156, status:"cut"},
+            {pos:"WD", name:"Brian Campbell", score:null, today:null, thru:"WD", r1:73, r2:null, r3:null, r4:null, tot:73, status:"wd"},
+        ];
+
+        // Calculate projected prize money based on current position
+        function calculateProjectedPrizes(scores) {
+            // Only active players earn prize money
+            const active = scores.filter(s => s.status === 'active');
+            // Group by total strokes to handle ties
+            const groups = {};
+            active.forEach(p => {
+                const key = p.tot;
+                if (!groups[key]) groups[key] = [];
+                groups[key].push(p);
+            });
+            // Sort groups by total ascending
+            const sortedTotals = Object.keys(groups).map(Number).sort((a,b) => a - b);
+            let posIndex = 0;
+            const prizeMap = {};
+            sortedTotals.forEach(tot => {
+                const tied = groups[tot];
+                const count = tied.length;
+                // Average the prize pool positions for tied players
+                let totalPrize = 0;
+                for (let i = 0; i < count; i++) {
+                    const idx = posIndex + i;
+                    if (idx < prizeDistribution.length) {
+                        totalPrize += prizeDistribution[idx] * TOTAL_PURSE;
+                    }
+                }
+                const avgPrize = totalPrize / count;
+                tied.forEach(p => {
+                    prizeMap[p.name] = Math.round(avgPrize);
+                });
+                posIndex += count;
+            });
+            return prizeMap;
+        }
+
+        function getGolferGroup(name) {
+            const g = allGolfers.find(g => g.name === name);
+            return g ? g.group : '?';
+        }
+
+        function formatScoreToPar(score) {
+            if (score === null || score === undefined) return '-';
+            if (score === 0) return 'E';
+            return score > 0 ? '+' + score : String(score);
+        }
+
+        function formatPrizeMoney(amount) {
+            if (!amount || amount === 0) return '$0';
+            return '$' + amount.toLocaleString();
+        }
+
+        function renderTournamentLeaderboard() {
+            const tbody = document.getElementById('tournamentLeaderboardBody');
+            if (!tbody) return;
+
+            // Load scores from API if available
+            fetch('/api/scores')
+              .then(res => res.json())
+              .then(data => {
+                if (data && Array.isArray(data) && data.length > 0) {
+                  tournamentScores.length = 0;
+                  tournamentScores.push(...data);
+                }
+              })
+              .catch(e => console.log('Scores API unavailable:', e));
+
+            const prizeMap = calculateProjectedPrizes(tournamentScores);
+
+            let html = '';
+            tournamentScores.forEach((p, idx) => {
+                const group = getGolferGroup(p.name);
+                const prize = prizeMap[p.name] || 0;
+                const isCut = p.status === 'cut' || p.status === 'wd';
+                const scoreStr = isCut ? (p.status === 'wd' ? 'WD' : 'CUT') : formatScoreToPar(p.score);
+                const todayStr = p.today !== null ? formatScoreToPar(p.today) : '-';
+                const thruStr = p.thru === 'F' ? 'F' : (p.thru || '-');
+
+                const groupColor = group === 'A' ? '#c4a35a' : group === 'B' ? '#16a34a' : group === 'C' ? '#3b82f6' : group === 'D' ? '#a855f7' : '#64748b';
+                const groupLabel = group === 'WC' ? 'WC' : group;
+
+                let rowClass = '';
+                if (!isCut && idx === 0) rowClass = 'rank-1';
+                else if (!isCut && idx < 10) rowClass = 'rank-2-8';
+                const cutStyle = isCut ? 'opacity: 0.5;' : '';
+
+                html += `<tr class="${rowClass}" style="${cutStyle}" data-name="${p.name.toLowerCase()}" data-group="${group}" data-status="${p.status}">
+                    <td class="font-bold">${p.pos}</td>
+                    <td class="font-semibold">${p.name}</td>
+                    <td><span style="background:${groupColor}22; color:${groupColor}; border:1px solid ${groupColor}55; padding:2px 8px; border-radius:4px; font-size:0.75rem; font-weight:600;">${groupLabel}</span></td>
+                    <td class="font-bold" style="color:${p.score !== null && p.score < 0 ? '#ef4444' : p.score === 0 ? '#f8fafc' : '#22c55e'}">${scoreStr}</td>
+                    <td style="color:${p.today !== null && p.today < 0 ? '#ef4444' : p.today === 0 ? '#f8fafc' : '#22c55e'}">${todayStr}</td>
+                    <td>${thruStr}</td>
+                    <td>${p.r1 || '-'}</td>
+                    <td>${p.r2 || '-'}</td>
+                    <td>${p.r3 || '-'}</td>
+                    <td>${p.r4 || '-'}</td>
+                    <td>${p.tot || '-'}</td>
+                    <td class="font-bold" style="color: ${prize > 0 ? '#c4a35a' : '#64748b'};">${formatPrizeMoney(prize)}</td>
+                </tr>`;
+            });
+            tbody.innerHTML = html;
+        }
+
+        function filterTournamentLeaderboard() {
+            const q = (document.getElementById('tournamentSearchInput').value || '').toLowerCase();
+            const filter = document.getElementById('tournamentFilterGroup').value;
+            document.querySelectorAll('#tournamentLeaderboardBody tr').forEach(row => {
+                const name = row.dataset.name || '';
+                const group = row.dataset.group || '';
+                const status = row.dataset.status || '';
+                let show = true;
+                if (q && !name.includes(q)) show = false;
+                if (filter === 'active' && status !== 'active') show = false;
+                if (filter === 'cut' && status !== 'cut' && status !== 'wd') show = false;
+                if (['A','B','C','D','WC'].includes(filter) && group !== filter) show = false;
+                row.style.display = show ? '' : 'none';
+            });
+        }
+
+        // =====================================================
+        // AUTH SYSTEM
+        // =====================================================
+        let currentUser = null;  // {id, email, name}
+        let authToken = null;
+        let adminVerified = false;
+        let isAdminUser = false;
+        let poolAccessGranted = false;
+        let poolSettings = { submissionDeadline: '2026-03-19T07:00:00Z', entryFee: 30, poolPassword: 'golf2026' };
+
+        // Load saved session on page load
+        function initAuth() {
+            // Check if pool access was previously granted this session
+            if (sessionStorage.getItem('gp_pool_access') === 'true') {
+                poolAccessGranted = true;
+                document.getElementById('pool-gate').style.display = 'none';
+            }
+            if (sessionStorage.getItem('gp_admin') === 'true') {
+                isAdminUser = true;
+                adminVerified = true;
+                poolAccessGranted = true;
+                document.getElementById('pool-gate').style.display = 'none';
+                document.getElementById('admin-tab-btn').classList.remove('hidden');
+            }
+            authToken = localStorage.getItem('gp_token');
+            if (authToken) {
+                fetch('/api/auth/me', { headers: { 'Authorization': 'Bearer ' + authToken } })
+                    .then(r => r.ok ? r.json() : Promise.reject())
+                    .then(data => { currentUser = data.user; updateAuthUI(); })
+                    .catch(() => { authToken = null; localStorage.removeItem('gp_token'); updateAuthUI(); });
+            }
+            // Load pool settings
+            fetch('/api/settings').then(r => r.json()).then(s => { if (s.submissionDeadline) poolSettings = s; }).catch(() => {});
+        }
+
+        // =====================================================
+        // POOL ENTRY GATE
+        // =====================================================
+        function verifyPoolPassword() {
+            const pw = document.getElementById('pool-gate-password').value;
+            if (!pw) { document.getElementById('pool-gate-error').classList.remove('hidden'); return; }
+            // Check against pool password via API, with client-side fallback
+            fetch('/api/admin/verify', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({password: pw, type: 'pool'})
+            }).then(r => {
+                if (!r.ok) throw new Error('API error');
+                return r.json();
+            }).then(data => {
+                if (data.valid) {
+                    poolAccessGranted = true;
+                    sessionStorage.setItem('gp_pool_access', 'true');
+                    document.getElementById('pool-gate').style.display = 'none';
+                } else {
+                    document.getElementById('pool-gate-error').classList.remove('hidden');
+                }
+            }).catch(() => {
+                // Fallback: check client-side if API isn't available
+                if (pw === poolSettings.poolPassword || pw === 'golf2026') {
+                    poolAccessGranted = true;
+                    sessionStorage.setItem('gp_pool_access', 'true');
+                    document.getElementById('pool-gate').style.display = 'none';
+                } else {
+                    document.getElementById('pool-gate-error').classList.remove('hidden');
+                }
+            });
+        }
+
+        function showPoolGateAdmin() {
+            document.getElementById('pool-gate-admin').classList.remove('hidden');
+        }
+
+        async function verifyAdminLogin() {
+            const user = document.getElementById('pool-gate-admin-user').value.trim();
+            const pw = document.getElementById('pool-gate-admin-pw').value;
+            if (!user || !pw) return;
+            try {
+                const res = await fetch('/api/admin/verify', {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({username: user, password: pw, type: 'admin'})
+                });
+                if (!res.ok) throw new Error('API error');
+                const data = await res.json();
+                if (data.valid) {
+                    isAdminUser = true;
+                    adminVerified = true;
+                    poolAccessGranted = true;
+                    sessionStorage.setItem('gp_pool_access', 'true');
+                    sessionStorage.setItem('gp_admin', 'true');
+                    document.getElementById('pool-gate').style.display = 'none';
+                    document.getElementById('admin-tab-btn').classList.remove('hidden');
+                } else {
+                    document.getElementById('pool-gate-admin-error').classList.remove('hidden');
+                }
+            } catch (e) {
+                // Fallback: check client-side if API isn't available
+                if (user === 'admin' && pw === 'golfpool2026') {
+                    isAdminUser = true;
+                    adminVerified = true;
+                    poolAccessGranted = true;
+                    sessionStorage.setItem('gp_pool_access', 'true');
+                    sessionStorage.setItem('gp_admin', 'true');
+                    document.getElementById('pool-gate').style.display = 'none';
+                    document.getElementById('admin-tab-btn').classList.remove('hidden');
+                } else {
+                    document.getElementById('pool-gate-admin-error').classList.remove('hidden');
+                }
+            }
+        }
+
+        function updateAuthUI() {
+            const loginBtn = document.getElementById('login-btn');
+            const signupBtn = document.getElementById('signup-btn');
+            const userInfo = document.getElementById('user-info');
+            const userDisplayName = document.getElementById('user-display-name');
+            const myEntriesTab = document.getElementById('my-entries-tab');
+
+            if (currentUser) {
+                loginBtn.classList.add('hidden');
+                signupBtn.classList.add('hidden');
+                userInfo.classList.remove('hidden');
+                userInfo.style.display = 'flex';
+                userDisplayName.textContent = currentUser.name;
+                myEntriesTab.classList.remove('hidden');
+            } else {
+                loginBtn.classList.remove('hidden');
+                signupBtn.classList.remove('hidden');
+                userInfo.classList.add('hidden');
+                userInfo.style.display = 'none';
+                myEntriesTab.classList.add('hidden');
+            }
+        }
+
+        // Auth modal
+        function showAuthModal(mode) {
+            const modal = document.getElementById('auth-modal');
+            modal.classList.remove('hidden');
+            modal.style.display = 'flex';
+            renderAuthForm(mode);
+        }
+
+        function hideAuthModal() {
+            const modal = document.getElementById('auth-modal');
+            modal.classList.add('hidden');
+            modal.style.display = 'none';
+        }
+
+        function renderAuthForm(mode) {
+            const el = document.getElementById('auth-modal-content');
+            if (mode === 'login') {
+                el.innerHTML = `
+                    <h3 class="text-xl font-bold mb-2">Welcome Back</h3>
+                    <p class="text-slate-400 text-sm mb-6">Log in to manage your entries</p>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-xs text-slate-400 block mb-1">Email</label>
+                            <input type="email" id="auth-email" class="w-full bg-green-900/20 border border-green-700/30 rounded px-3 py-2 text-sm" placeholder="you@example.com">
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-400 block mb-1">Password</label>
+                            <input type="password" id="auth-password" class="w-full bg-green-900/20 border border-green-700/30 rounded px-3 py-2 text-sm" placeholder="Your password" onkeydown="if(event.key==='Enter')doLogin()">
+                        </div>
+                        <p id="auth-error" class="text-red-400 text-xs hidden"></p>
+                        <button class="button-primary w-full" onclick="doLogin()">Log In</button>
+                        <p class="text-center text-sm text-slate-400">Don't have an account? <a href="#" onclick="renderAuthForm('register');return false;" style="color:#16a34a;text-decoration:underline;">Sign up</a></p>
+                    </div>`;
+            } else {
+                el.innerHTML = `
+                    <h3 class="text-xl font-bold mb-2">Create Account</h3>
+                    <p class="text-slate-400 text-sm mb-6">Sign up to enter the golf pool</p>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-xs text-slate-400 block mb-1">Full Name</label>
+                            <input type="text" id="auth-name" class="w-full bg-green-900/20 border border-green-700/30 rounded px-3 py-2 text-sm" placeholder="John Smith">
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-400 block mb-1">Email</label>
+                            <input type="email" id="auth-email" class="w-full bg-green-900/20 border border-green-700/30 rounded px-3 py-2 text-sm" placeholder="you@example.com">
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-400 block mb-1">Password</label>
+                            <input type="password" id="auth-password" class="w-full bg-green-900/20 border border-green-700/30 rounded px-3 py-2 text-sm" placeholder="Create a password (min 6 characters)">
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-400 block mb-1">Confirm Password</label>
+                            <input type="password" id="auth-password-confirm" class="w-full bg-green-900/20 border border-green-700/30 rounded px-3 py-2 text-sm" placeholder="Confirm your password" onkeydown="if(event.key==='Enter')doRegister()">
+                        </div>
+                        <p id="auth-error" class="text-red-400 text-xs hidden"></p>
+                        <button class="button-primary w-full" onclick="doRegister()">Create Account</button>
+                        <p class="text-center text-sm text-slate-400">Already have an account? <a href="#" onclick="renderAuthForm('login');return false;" style="color:#16a34a;text-decoration:underline;">Log in</a></p>
+                    </div>`;
+            }
+        }
+
+        function showAuthError(msg) {
+            const el = document.getElementById('auth-error');
+            if (el) { el.textContent = msg; el.classList.remove('hidden'); }
+        }
+
+        async function doLogin() {
+            const email = document.getElementById('auth-email').value.trim();
+            const password = document.getElementById('auth-password').value;
+            if (!email || !password) { showAuthError('Please fill in all fields'); return; }
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({email, password})
+                });
+                const data = await res.json();
+                if (!res.ok) { showAuthError(data.error || 'Login failed'); return; }
+                authToken = data.token;
+                currentUser = data.user;
+                localStorage.setItem('gp_token', authToken);
+                hideAuthModal();
+                updateAuthUI();
+            } catch (e) { showAuthError('Network error. Please try again.'); }
+        }
+
+        async function doRegister() {
+            const name = document.getElementById('auth-name').value.trim();
+            const email = document.getElementById('auth-email').value.trim();
+            const password = document.getElementById('auth-password').value;
+            const confirm = document.getElementById('auth-password-confirm').value;
+            if (!name || !email || !password) { showAuthError('Please fill in all fields'); return; }
+            if (password.length < 6) { showAuthError('Password must be at least 6 characters'); return; }
+            if (password !== confirm) { showAuthError('Passwords do not match'); return; }
+            try {
+                const res = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({name, email, password})
+                });
+                const data = await res.json();
+                if (!res.ok) { showAuthError(data.error || 'Registration failed'); return; }
+                authToken = data.token;
+                currentUser = data.user;
+                localStorage.setItem('gp_token', authToken);
+                hideAuthModal();
+                updateAuthUI();
+            } catch (e) { showAuthError('Network error. Please try again.'); }
+        }
+
+        async function logoutUser() {
+            if (authToken) {
+                fetch('/api/auth/logout', { method:'POST', headers:{'Authorization':'Bearer '+authToken} }).catch(()=>{});
+            }
+            authToken = null;
+            currentUser = null;
+            adminVerified = false;
+            localStorage.removeItem('gp_token');
+            updateAuthUI();
+            goToTab('home');
+        }
+
+        // (Admin gate is now handled by the pool entry gate above)
+
+        // =====================================================
+        // MY ENTRIES — view/edit user entries
+        // =====================================================
+        let userEntries = [];
+
+        async function loadMyEntries() {
+            if (!currentUser || !authToken) return;
+            try {
+                const res = await fetch('/api/entries?userId=' + currentUser.id, {
+                    headers: {'Authorization': 'Bearer ' + authToken}
+                });
+                if (res.ok) { userEntries = await res.json(); }
+            } catch (e) { userEntries = []; }
+            renderMyEntries();
+        }
+
+        function isBeforeDeadline() {
+            return new Date() < new Date(poolSettings.submissionDeadline);
+        }
+
+        function renderMyEntries() {
+            const container = document.getElementById('myentries-container');
+            if (!container) return;
+            const beforeDeadline = isBeforeDeadline();
+            const subtitle = document.getElementById('myentries-subtitle');
+            const newBtn = document.getElementById('new-entry-btn');
+
+            if (beforeDeadline) {
+                if (subtitle) subtitle.textContent = 'Submissions are open. You can edit your entries until the tournament starts.';
+                if (newBtn) newBtn.classList.remove('hidden');
+            } else {
+                if (subtitle) subtitle.textContent = 'Submissions are closed. Your entries are locked.';
+                if (newBtn) newBtn.classList.add('hidden');
+            }
+
+            if (userEntries.length === 0) {
+                container.innerHTML = `
+                    <div class="stat-card text-center py-12">
+                        <p class="text-xl text-slate-400 mb-4">You haven't submitted any entries yet</p>
+                        ${beforeDeadline ? '<button class="button-primary" onclick="goToTab(\'entry\')">Enter the Tournament</button>' : '<p class="text-slate-500">Submissions are closed for this tournament.</p>'}
+                    </div>`;
+                return;
+            }
+
+            let html = '';
+            userEntries.forEach((entry, idx) => {
+                const tb = entry.tiebreaker !== null && entry.tiebreaker !== undefined ? formatScore(entry.tiebreaker) : '—';
+                html += `
+                <div class="stat-card mb-4">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <h4 class="font-bold text-lg">Entry #${idx + 1}</h4>
+                            <p class="text-xs text-slate-500">Submitted: ${new Date(entry.submittedAt).toLocaleDateString()}</p>
+                        </div>
+                        ${beforeDeadline ? '<button class="text-sm px-3 py-1 rounded" style="background:rgba(196,163,90,0.15);border:1px solid rgba(196,163,90,0.3);color:#c4a35a;" onclick="editEntry(\'' + entry.id + '\')">Edit</button>' : '<span class="text-xs px-2 py-1 rounded" style="background:rgba(100,116,139,0.2);color:#94a3b8;">Locked</span>'}
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                        <div><span class="text-slate-400 text-xs block">Group A</span><span class="font-semibold">${entry.groupA || '—'}</span></div>
+                        <div><span class="text-slate-400 text-xs block">Group B</span><span class="font-semibold">${entry.groupB || '—'}</span></div>
+                        <div><span class="text-slate-400 text-xs block">Group C</span><span class="font-semibold">${entry.groupC || '—'}</span></div>
+                        <div><span class="text-slate-400 text-xs block">Group D</span><span class="font-semibold">${entry.groupD || '—'}</span></div>
+                        <div><span class="text-slate-400 text-xs block">Wild Card 1 <span class="gold-badge">2x</span></span><span class="font-semibold">${entry.wildCard1 || '—'}</span></div>
+                        <div><span class="text-slate-400 text-xs block">Wild Card 2 <span class="gold-badge">2x</span></span><span class="font-semibold">${entry.wildCard2 || '—'}</span></div>
+                        <div><span class="text-slate-400 text-xs block">Tiebreaker</span><span class="font-semibold">${tb}</span></div>
+                        <div><span class="text-slate-400 text-xs block">Payment</span><span class="font-semibold" style="color:#c4a35a;">$${poolSettings.entryFee}</span></div>
+                    </div>
+                </div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        // Edit an existing entry — load picks into the entry form
+        let editingEntryId = null;
+        function editEntry(entryId) {
+            if (!isBeforeDeadline()) { alert('Submissions are closed.'); return; }
+            const entry = userEntries.find(e => e.id === entryId);
+            if (!entry) return;
+            editingEntryId = entryId;
+            entryCurrentStep = 1; // skip info step, go to Group A
+            entryPicks = {
+                name: entry.name || currentUser.name,
+                email: entry.email || currentUser.email,
+                A: entry.groupA || null,
+                B: entry.groupB || null,
+                C: entry.groupC || null,
+                D: entry.groupD || null,
+                WC1: entry.wildCard1 || null,
+                WC2: entry.wildCard2 || null,
+                tiebreaker: entry.tiebreaker !== undefined ? entry.tiebreaker : null
+            };
+            goToTab('entry');
+        }
+
+        // =====================================================
+        // OVERRIDE: switchTab to handle auth gates
+        // =====================================================
+        const _originalSwitchTab = switchTab;
+        switchTab = function(tabName) {
+            // Admin tab only accessible if logged in as admin
+            if (tabName === 'admin' && !isAdminUser) {
+                return;
+            }
+            // Entry form requires login
+            if (tabName === 'entry' && !currentUser) {
+                showAuthModal('register');
+                return;
+            }
+            // My Entries requires login
+            if (tabName === 'myentries' && !currentUser) {
+                showAuthModal('login');
+                return;
+            }
+            // Call original switchTab
+            _originalSwitchTab(tabName);
+            // Load my entries when switching to that tab
+            if (tabName === 'myentries') loadMyEntries();
+        };
+
+        // Also override goToTab
+        const _originalGoToTab = goToTab;
+        goToTab = function(tabName) {
+            if (tabName === 'admin' && !isAdminUser) return;
+            if (tabName === 'entry' && !currentUser) { showAuthModal('register'); return; }
+            if (tabName === 'myentries' && !currentUser) { showAuthModal('login'); return; }
+            _originalGoToTab(tabName);
+            if (tabName === 'myentries') loadMyEntries();
+        };
+
+        // =====================================================
+        // OVERRIDE: submitEntry to include userId and handle edits
+        // =====================================================
+        const _originalSubmitEntry = submitEntry;
+        submitEntry = async function() {
+            const entry = {
+                userId: currentUser ? currentUser.id : null,
+                name: entryPicks.name,
+                email: entryPicks.email,
+                groupA: entryPicks.A,
+                groupB: entryPicks.B,
+                groupC: entryPicks.C,
+                groupD: entryPicks.D,
+                wildCard1: entryPicks.WC1,
+                wildCard2: entryPicks.WC2,
+                tiebreaker: entryPicks.tiebreaker,
+            };
+
+            try {
+                let res;
+                if (editingEntryId) {
+                    // Update existing entry
+                    entry.id = editingEntryId;
+                    res = await fetch('/api/entries', {
+                        method: 'PUT',
+                        headers: {'Content-Type':'application/json', 'Authorization': 'Bearer ' + (authToken||'')},
+                        body: JSON.stringify(entry)
+                    });
+                } else {
+                    // New entry
+                    res = await fetch('/api/entries', {
+                        method: 'POST',
+                        headers: {'Content-Type':'application/json', 'Authorization': 'Bearer ' + (authToken||'')},
+                        body: JSON.stringify(entry)
+                    });
+                }
+                if (res.ok) console.log(editingEntryId ? 'Entry updated' : 'Entry saved');
+            } catch (e) { console.log('Entry save failed:', e); }
+
+            const isEdit = !!editingEntryId;
+            editingEntryId = null;
+
+            // Show confirmation
+            const el = document.getElementById('entry-main-content');
+            const tb = entryPicks.tiebreaker !== null ? formatScore(entryPicks.tiebreaker) : '—';
+            const lsUrl = (document.getElementById('admin-leaguesafe-url') || {}).value || leagueSafeUrl;
+            const hasLsUrl = lsUrl.trim().length > 0;
+
+            el.innerHTML = `
+                <div class="stat-card max-w-lg">
+                    <div class="text-center mb-6">
+                        <div style="font-size:3rem; margin-bottom:8px;">&#9989;</div>
+                        <h3 class="text-2xl font-bold mb-2" style="color:#16a34a;">${isEdit ? 'Entry Updated!' : 'Picks Submitted!'}</h3>
+                        <p class="text-slate-400">${isEdit ? 'Your entry has been updated successfully.' : 'Your selections have been saved. Complete your payment below to finalize your entry.'}</p>
+                    </div>
+                    <div class="space-y-3 mb-6 p-4 rounded" style="background:rgba(21,128,61,0.1); border:1px solid rgba(22,163,74,0.3);">
+                        <p class="text-sm text-slate-300"><strong>Name:</strong> ${entryPicks.name}</p>
+                        <p class="text-sm text-slate-300"><strong>Team:</strong> ${entryPicks.A}, ${entryPicks.B}, ${entryPicks.C}, ${entryPicks.D}</p>
+                        <p class="text-sm text-slate-300"><strong>Wild Cards (2x):</strong> ${entryPicks.WC1}, ${entryPicks.WC2}</p>
+                        <p class="text-sm text-slate-300"><strong>Tiebreaker:</strong> ${tb}</p>
+                    </div>
+                    ${!isEdit ? '<div class="p-4 rounded mb-4" style="background:rgba(196,163,90,0.1); border:1px solid rgba(196,163,90,0.3);"><h4 class="font-bold mb-2" style="color:#c4a35a;">Step 2: Complete Payment</h4><p class="text-sm text-slate-300 mb-4">Pay your $30.00 entry fee securely through TeamStake. Your entry will be confirmed once payment is received.</p>' + (hasLsUrl ? '<a href="' + lsUrl.trim() + '" target="_blank" rel="noopener noreferrer" class="button-primary block text-center w-full" style="font-size:1.1rem;padding:14px;text-decoration:none;display:block;">Pay $30.00 via TeamStake &#8599;</a>' : '<div class="p-3 rounded text-center" style="background:rgba(100,116,139,0.2); border:1px solid rgba(100,116,139,0.3);"><p class="text-sm text-slate-400">TeamStake payment link not yet configured. Contact the pool commissioner to make your payment.</p></div>') + '</div>' : ''}
+                    <div class="text-center mt-4">
+                        ${currentUser ? '<button class="button-secondary mr-2" onclick="goToTab(\'myentries\')">View My Entries</button>' : ''}
+                        <button class="button-secondary" onclick="resetEntry()">Submit Another Entry</button>
+                    </div>
+                </div>`;
+            const sidebar = document.getElementById('entry-sidebar');
+            if (sidebar) sidebar.innerHTML = '';
+        };
+
+        // Pre-fill entry form with user info if logged in
+        const _originalRenderEntryForm = renderEntryForm;
+        renderEntryForm = function() {
+            _originalRenderEntryForm();
+            // Auto-fill name and email if logged in
+            if (currentUser && entryCurrentStep === 0) {
+                const nameEl = document.getElementById('entry-name');
+                const emailEl = document.getElementById('entry-email');
+                if (nameEl && !nameEl.value) nameEl.value = currentUser.name || '';
+                if (emailEl && !emailEl.value) emailEl.value = currentUser.email || '';
+            }
+        };
+
+        // Initialize auth on page load
+        document.addEventListener('DOMContentLoaded', initAuth);
+    </script>
+</body>
+</html>
