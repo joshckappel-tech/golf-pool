@@ -1,66 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { promises as fs } from 'fs'
-import fsSync from 'fs'
-import path from 'path'
 
-// Use /tmp on Vercel (read-only file system), local data/ otherwise
-const IS_VERCEL = !!process.env.VERCEL
-const SOURCE_DATA_DIR = path.join(process.cwd(), 'data')
-const DATA_DIR = IS_VERCEL ? '/tmp/golf-pool-data' : SOURCE_DATA_DIR
-
-// Ensure data directory exists and seed from source on Vercel
-async function ensureDataDir() {
-  try {
-    await fs.mkdir(DATA_DIR, { recursive: true })
-  } catch (err) {
-    // Directory already exists
+async function getDb() {
+  if (process.env.KV_REST_API_URL) {
+    return await import('@/lib/db-kv')
   }
+  // Fallback: file-based for local dev
+  const { promises: fs } = await import('fs')
+  const fsSync = (await import('fs')).default
+  const path = (await import('path')).default
 
-  // On Vercel, copy entries.json from deployed data/ if not in /tmp yet
-  if (IS_VERCEL) {
-    const tmpPath = path.join(DATA_DIR, 'entries.json')
-    if (!fsSync.existsSync(tmpPath)) {
-      const sourcePath = path.join(SOURCE_DATA_DIR, 'entries.json')
-      if (fsSync.existsSync(sourcePath)) {
-        await fs.copyFile(sourcePath, tmpPath)
-      } else {
-        await fs.writeFile(tmpPath, '[]', 'utf-8')
+  const IS_VERCEL = !!process.env.VERCEL
+  const SOURCE_DATA_DIR = path.join(process.cwd(), 'data')
+  const DATA_DIR = IS_VERCEL ? '/tmp/golf-pool-data' : SOURCE_DATA_DIR
+
+  return {
+    async getAllEntries() {
+      try {
+        await fs.mkdir(DATA_DIR, { recursive: true })
+        const tmpPath = path.join(DATA_DIR, 'entries.json')
+        if (IS_VERCEL && !fsSync.existsSync(tmpPath)) {
+          const src = path.join(SOURCE_DATA_DIR, 'entries.json')
+          if (fsSync.existsSync(src)) await fs.copyFile(src, tmpPath)
+          else await fs.writeFile(tmpPath, '[]', 'utf-8')
+        }
+        const data = await fs.readFile(tmpPath, 'utf-8')
+        return JSON.parse(data)
+      } catch (e: any) {
+        if (e.code === 'ENOENT') return []
+        return []
       }
+    },
+    async saveAllEntries(entries: any[]) {
+      await fs.mkdir(DATA_DIR, { recursive: true })
+      await fs.writeFile(path.join(DATA_DIR, 'entries.json'), JSON.stringify(entries, null, 2), 'utf-8')
     }
-  }
-}
-
-// Get path to entries JSON file
-function getEntriesPath(): string {
-  return path.join(DATA_DIR, 'entries.json')
-}
-
-// Read entries from JSON file
-async function readEntries(): Promise<any[]> {
-  try {
-    await ensureDataDir()
-    const filePath = getEntriesPath()
-    const data = await fs.readFile(filePath, 'utf-8')
-    return JSON.parse(data)
-  } catch (err: any) {
-    // File doesn't exist or is invalid JSON, return empty array
-    if (err.code === 'ENOENT') {
-      return []
-    }
-    console.error('Error reading entries:', err)
-    return []
-  }
-}
-
-// Write entries to JSON file
-async function writeEntries(entries: any[]): Promise<void> {
-  try {
-    await ensureDataDir()
-    const filePath = getEntriesPath()
-    await fs.writeFile(filePath, JSON.stringify(entries, null, 2), 'utf-8')
-  } catch (err) {
-    console.error('Error writing entries:', err)
-    throw err
   }
 }
 
@@ -68,15 +41,18 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
     const userId = searchParams.get('userId')
+    const db = await getDb()
 
-    const entries = await readEntries()
-
-    // Filter by userId if provided
-    if (userId) {
-      const filtered = entries.filter((e) => e.userId === userId)
-      return NextResponse.json(filtered)
+    let entries: any[]
+    if ('getAllEntries' in db) {
+      entries = await db.getAllEntries()
+    } else {
+      entries = await (db as any).getAllEntries()
     }
 
+    if (userId) {
+      return NextResponse.json(entries.filter((e: any) => e.userId === userId))
+    }
     return NextResponse.json(entries)
   } catch (err) {
     console.error('GET /api/entries error:', err)
@@ -87,18 +63,19 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const entry = await request.json()
-
-    // Validate entry data
     if (!entry.name || !entry.email) {
-      return NextResponse.json(
-        { error: 'Missing required fields: name, email' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Missing required fields: name, email' }, { status: 400 })
     }
 
-    const entries = await readEntries()
+    const db = await getDb()
+    let entries: any[]
 
-    // Add entry with unique ID
+    if ('getAllEntries' in db) {
+      entries = await db.getAllEntries()
+    } else {
+      entries = await (db as any).getAllEntries()
+    }
+
     const newEntry = {
       id: `entry-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       ...entry,
@@ -107,56 +84,55 @@ export async function POST(request: NextRequest) {
     }
 
     entries.push(newEntry)
-    await writeEntries(entries)
+
+    if ('saveAllEntries' in db) {
+      await (db as any).saveAllEntries(entries)
+    } else {
+      // KV path: use kv.set directly
+      const { kv } = await import('@vercel/kv')
+      await kv.set('entries', entries)
+    }
 
     return NextResponse.json(newEntry, { status: 201 })
   } catch (err) {
     console.error('POST /api/entries error:', err)
-    return NextResponse.json(
-      { error: 'Failed to save entry' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to save entry' }, { status: 500 })
   }
 }
 
 export async function PUT(request: NextRequest) {
   try {
     const entry = await request.json()
-
-    // Validate entry data
     if (!entry.id) {
-      return NextResponse.json(
-        { error: 'Missing entry id' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Missing entry id' }, { status: 400 })
     }
 
-    const entries = await readEntries()
-    const index = entries.findIndex((e) => e.id === entry.id)
+    const db = await getDb()
+    let entries: any[]
 
+    if ('getAllEntries' in db) {
+      entries = await db.getAllEntries()
+    } else {
+      entries = await (db as any).getAllEntries()
+    }
+
+    const index = entries.findIndex((e: any) => e.id === entry.id)
     if (index === -1) {
-      return NextResponse.json(
-        { error: 'Entry not found' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Entry not found' }, { status: 404 })
     }
 
-    // Update entry, preserving submittedAt but updating updatedAt
-    const updatedEntry = {
-      ...entries[index],
-      ...entry,
-      updatedAt: new Date().toISOString(),
+    entries[index] = { ...entries[index], ...entry, updatedAt: new Date().toISOString() }
+
+    if ('saveAllEntries' in db) {
+      await (db as any).saveAllEntries(entries)
+    } else {
+      const { kv } = await import('@vercel/kv')
+      await kv.set('entries', entries)
     }
 
-    entries[index] = updatedEntry
-    await writeEntries(entries)
-
-    return NextResponse.json(updatedEntry, { status: 200 })
+    return NextResponse.json(entries[index], { status: 200 })
   } catch (err) {
     console.error('PUT /api/entries error:', err)
-    return NextResponse.json(
-      { error: 'Failed to update entry' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to update entry' }, { status: 500 })
   }
 }

@@ -11,19 +11,19 @@ export async function POST(request: NextRequest) {
     const body: VerifyRequest = await request.json()
 
     if (!body.password) {
-      return NextResponse.json(
-        { error: 'Missing password field' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Missing password field' }, { status: 400 })
     }
 
-    // Try to load settings from file, fall back to defaults
     let settings: any = {}
     try {
-      const { getSettings } = await import('@/lib/db')
-      settings = getSettings()
+      let db: any
+      if (process.env.KV_REST_API_URL) {
+        db = await import('@/lib/db-kv')
+      } else {
+        db = await import('@/lib/db')
+      }
+      settings = await db.getSettings()
     } catch (e) {
-      // File system may not be available on Vercel — use defaults
       console.log('Could not load settings, using defaults')
     }
 
@@ -41,9 +41,6 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     console.error('Admin verify error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
