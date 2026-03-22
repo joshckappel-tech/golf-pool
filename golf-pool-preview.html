@@ -1556,55 +1556,72 @@
 
         // Load live scores from API, update tournamentScores + prizeMap
         // Returns a promise so callers can await it
-        function loadLiveScores() {
-            // Call /api/scores/update which fetches LIVE data from ESPN and caches it
-            // Falls back to /api/scores (cached) if update fails
-            return fetch('/api/scores/update')
-              .then(res => res.json())
-              .then(data => {
-                let players = [];
-                if (data && data.players && Array.isArray(data.players) && data.players.length > 0) {
-                    players = data.players.map(p => ({
-                        pos: p.pos || '--',
-                        name: p.name,
-                        score: p.score,
-                        scoreDisplay: p.scoreDisplay || formatScoreToPar(p.score),
-                        today: p.today !== undefined ? p.today : null,
-                        thru: p.thru || '--',
-                        r1: p.rounds ? p.rounds[0] : (p.r1 || null),
-                        r2: p.rounds ? p.rounds[1] : (p.r2 || null),
-                        r3: p.rounds ? p.rounds[2] : (p.r3 || null),
-                        r4: p.rounds ? p.rounds[3] : (p.r4 || null),
-                        tot: p.totalStrokes || p.tot || null,
-                        status: p.status || 'active',
-                    }));
-                    tournamentScores.length = 0;
-                    tournamentScores.push(...players);
-                    liveScoresReady = true;
+        function processScoresData(data) {
+            let players = [];
+            if (data && data.players && Array.isArray(data.players) && data.players.length > 0) {
+                players = data.players.map(p => ({
+                    pos: p.pos || '--',
+                    name: p.name,
+                    score: p.score,
+                    scoreDisplay: p.scoreDisplay || formatScoreToPar(p.score),
+                    today: p.today !== undefined ? p.today : null,
+                    thru: p.thru || '--',
+                    r1: p.rounds ? p.rounds[0] : (p.r1 || null),
+                    r2: p.rounds ? p.rounds[1] : (p.r2 || null),
+                    r3: p.rounds ? p.rounds[2] : (p.r3 || null),
+                    r4: p.rounds ? p.rounds[3] : (p.r4 || null),
+                    tot: p.totalStrokes || p.tot || null,
+                    status: p.status || 'active',
+                }));
+                tournamentScores.length = 0;
+                tournamentScores.push(...players);
+                liveScoresReady = true;
 
-                    // Update purse if API provides it
-                    if (data.tournament && data.tournament.purse) {
-                        TOTAL_PURSE = data.tournament.purse;
-                        const purseEl = document.getElementById('purseDisplay');
-                        if (purseEl) purseEl.textContent = 'Total Purse: $' + TOTAL_PURSE.toLocaleString();
-                    }
-                } else if (data && Array.isArray(data) && data.length > 0) {
-                    tournamentScores.length = 0;
-                    tournamentScores.push(...data);
-                    liveScoresReady = true;
+                if (data.tournament && data.tournament.purse) {
+                    TOTAL_PURSE = data.tournament.purse;
+                    const purseEl = document.getElementById('purseDisplay');
+                    if (purseEl) purseEl.textContent = 'Total Purse: $' + TOTAL_PURSE.toLocaleString();
                 }
+            } else if (data && Array.isArray(data) && data.length > 0) {
+                tournamentScores.length = 0;
+                tournamentScores.push(...data);
+                liveScoresReady = true;
+            }
+            livePrizeMap = calculateProjectedPrizes(tournamentScores);
+            return { tournament: data?.tournament || null, lastUpdated: data?.lastUpdated || null };
+        }
 
-                // Recalculate prize map from latest scores
-                livePrizeMap = calculateProjectedPrizes(tournamentScores);
+        async function loadLiveScores() {
+            // Always calculate from whatever data we have first (hardcoded fallback)
+            livePrizeMap = calculateProjectedPrizes(tournamentScores);
 
-                return { tournament: data?.tournament || null, lastUpdated: data?.lastUpdated || null };
-              })
-              .catch(e => {
-                console.log('Scores API unavailable:', e);
-                // Still calculate from whatever data we have (hardcoded fallback)
-                livePrizeMap = calculateProjectedPrizes(tournamentScores);
-                return { tournament: null, lastUpdated: null };
-              });
+            // Try fetching live data from ESPN via /api/scores/update
+            // If that fails, try cached /api/scores
+            // If both fail, we still have the hardcoded tournamentScores
+            try {
+                const res = await fetch('/api/scores/update');
+                if (res.ok) {
+                    const data = await res.json();
+                    return processScoresData(data);
+                }
+            } catch (e) {
+                console.log('Live ESPN fetch failed:', e);
+            }
+
+            // Fallback: try cached scores
+            try {
+                const res = await fetch('/api/scores');
+                if (res.ok) {
+                    const data = await res.json();
+                    return processScoresData(data);
+                }
+            } catch (e) {
+                console.log('Cached scores also unavailable:', e);
+            }
+
+            // Both failed — use hardcoded data (already in tournamentScores)
+            console.log('Using hardcoded scores as fallback');
+            return { tournament: null, lastUpdated: null };
         }
 
         // =====================================================
@@ -2497,19 +2514,36 @@
 
         let autoRefreshInterval = null;
 
-        async function renderTournamentLeaderboard() {
+        function renderTournamentLeaderboard() {
             const tbody = document.getElementById('tournamentLeaderboardBody');
             if (!tbody) return;
 
-            // Show loading state on first load
-            if (!liveScoresReady) {
-                tbody.innerHTML = '<tr><td colspan="12" style="text-align:center; padding:20px; color:#94a3b8;">Loading live scores from ESPN...</td></tr>';
+            // ALWAYS render immediately from whatever data we have (hardcoded or cached)
+            drawTournamentRows(null, null);
+
+            // Then try to fetch live data in the background and re-render
+            loadLiveScores().then(({ tournament: tournamentInfo, lastUpdated }) => {
+                drawTournamentRows(tournamentInfo, lastUpdated);
+            });
+
+            // Set up auto-refresh every 5 minutes if not already running
+            if (!autoRefreshInterval) {
+                autoRefreshInterval = setInterval(() => {
+                    loadLiveScores().then(({ tournament: tournamentInfo, lastUpdated }) => {
+                        drawTournamentRows(tournamentInfo, lastUpdated);
+                        if (leaderboardData.length > 0) {
+                            loadAndRenderPoolLeaderboard();
+                        }
+                    });
+                }, 5 * 60 * 1000);
             }
+        }
 
-            // Load live scores (updates tournamentScores + livePrizeMap)
-            const { tournament: tournamentInfo, lastUpdated } = await loadLiveScores();
+        function drawTournamentRows(tournamentInfo, lastUpdated) {
+            const tbody = document.getElementById('tournamentLeaderboardBody');
+            if (!tbody) return;
 
-            // Render tournament info bar
+            // Update tournament info bar
             const infoEl = document.getElementById('tournamentInfoBar');
             if (infoEl) {
                 let infoHtml = '';
@@ -2528,10 +2562,12 @@
             }
 
             // Render the leaderboard rows
+            const prizeMap = livePrizeMap && Object.keys(livePrizeMap).length > 0 ? livePrizeMap : calculateProjectedPrizes(tournamentScores);
+
             let html = '';
             tournamentScores.forEach((p, idx) => {
                 const group = getGolferGroup(p.name);
-                const prize = livePrizeMap[p.name] || 0;
+                const prize = prizeMap[p.name] || 0;
                 const isCut = p.status === 'cut' || p.status === 'wd' || p.status === 'withdrawn' || p.status === 'disqualified';
                 const scoreStr = isCut ? (p.status === 'wd' || p.status === 'withdrawn' ? 'WD' : p.status === 'disqualified' ? 'DQ' : 'CUT') : formatScoreToPar(p.score);
                 const todayStr = p.today !== null && p.today !== undefined ? formatScoreToPar(p.today) : '-';
@@ -2561,18 +2597,6 @@
                 </tr>`;
             });
             tbody.innerHTML = html;
-
-            // Set up auto-refresh every 5 minutes if not already running
-            if (!autoRefreshInterval) {
-                autoRefreshInterval = setInterval(async () => {
-                    await loadLiveScores();
-                    renderTournamentLeaderboard();
-                    // Also refresh pool leaderboard if entries exist
-                    if (leaderboardData.length > 0) {
-                        loadAndRenderPoolLeaderboard();
-                    }
-                }, 5 * 60 * 1000);
-            }
         }
 
         function filterTournamentLeaderboard() {
