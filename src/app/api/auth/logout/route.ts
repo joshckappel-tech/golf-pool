@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { deleteSession, getSession } from '@/lib/db'
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,8 +13,20 @@ export async function POST(request: NextRequest) {
 
     const token = authHeader.substring(7) // Remove "Bearer " prefix
 
+    // Dynamic import to handle Vercel file system
+    let db: any
+    try {
+      db = await import('@/lib/db')
+    } catch (importErr) {
+      console.error('Failed to import db module:', importErr)
+      return NextResponse.json(
+        { error: 'Database initialization failed' },
+        { status: 503 }
+      )
+    }
+
     // Verify session exists
-    const session = getSession(token)
+    const session = db.getSession(token)
     if (!session) {
       return NextResponse.json(
         { error: 'Invalid session' },
@@ -24,7 +35,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Delete session
-    deleteSession(token)
+    db.deleteSession(token)
 
     return NextResponse.json(
       { message: 'Logged out successfully' },

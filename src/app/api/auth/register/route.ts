@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
-import { getUserByEmail, saveUser, saveSession } from '@/lib/db'
 
 interface RegisterRequest {
   email: string
@@ -29,20 +28,32 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check for duplicate email
-    const existingUser = getUserByEmail(body.email)
-    if (existingUser) {
-      return NextResponse.json(
-        { error: 'Email already registered' },
-        { status: 409 }
-      )
-    }
-
     // Validate password length
     if (body.password.length < 6) {
       return NextResponse.json(
         { error: 'Password must be at least 6 characters' },
         { status: 400 }
+      )
+    }
+
+    // Dynamic import to handle Vercel file system initialization
+    let db: any
+    try {
+      db = await import('@/lib/db')
+    } catch (importErr) {
+      console.error('Failed to import db module:', importErr)
+      return NextResponse.json(
+        { error: 'Database initialization failed. Please try again.' },
+        { status: 503 }
+      )
+    }
+
+    // Check for duplicate email
+    const existingUser = db.getUserByEmail(body.email.toLowerCase())
+    if (existingUser) {
+      return NextResponse.json(
+        { error: 'Email already registered' },
+        { status: 409 }
       )
     }
 
@@ -63,7 +74,7 @@ export async function POST(request: NextRequest) {
       createdAt: new Date().toISOString(),
     }
 
-    saveUser(user)
+    db.saveUser(user)
 
     // Create session token
     const sessionToken = crypto.randomBytes(32).toString('hex')
@@ -77,7 +88,7 @@ export async function POST(request: NextRequest) {
       expiresAt: expiresAt.toISOString(),
     }
 
-    saveSession(session)
+    db.saveSession(session)
 
     return NextResponse.json(
       {
@@ -93,7 +104,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Register error:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error: ' + (error instanceof Error ? error.message : String(error)) },
       { status: 500 }
     )
   }

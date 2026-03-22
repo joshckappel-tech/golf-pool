@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
-import { getUserByEmail, saveSession } from '@/lib/db'
 
 interface LoginRequest {
   email: string
@@ -19,8 +18,20 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Dynamic import to handle Vercel file system initialization
+    let db: any
+    try {
+      db = await import('@/lib/db')
+    } catch (importErr) {
+      console.error('Failed to import db module:', importErr)
+      return NextResponse.json(
+        { error: 'Database initialization failed. Please try again.' },
+        { status: 503 }
+      )
+    }
+
     // Look up user by email
-    const user = getUserByEmail(body.email.toLowerCase())
+    const user = db.getUserByEmail(body.email.toLowerCase())
     if (!user) {
       return NextResponse.json(
         { error: 'Invalid email or password' },
@@ -52,7 +63,7 @@ export async function POST(request: NextRequest) {
       expiresAt: expiresAt.toISOString(),
     }
 
-    saveSession(session)
+    db.saveSession(session)
 
     return NextResponse.json(
       {
@@ -68,7 +79,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Login error:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error: ' + (error instanceof Error ? error.message : String(error)) },
       { status: 500 }
     )
   }

@@ -1,20 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { promises as fs } from 'fs'
+import fsSync from 'fs'
 import path from 'path'
 
-// Ensure data directory exists
+// Use /tmp on Vercel (read-only file system), local data/ otherwise
+const IS_VERCEL = !!process.env.VERCEL
+const SOURCE_DATA_DIR = path.join(process.cwd(), 'data')
+const DATA_DIR = IS_VERCEL ? '/tmp/golf-pool-data' : SOURCE_DATA_DIR
+
+// Ensure data directory exists and seed from source on Vercel
 async function ensureDataDir() {
-  const dataDir = path.join(process.cwd(), 'data')
   try {
-    await fs.mkdir(dataDir, { recursive: true })
+    await fs.mkdir(DATA_DIR, { recursive: true })
   } catch (err) {
     // Directory already exists
+  }
+
+  // On Vercel, copy entries.json from deployed data/ if not in /tmp yet
+  if (IS_VERCEL) {
+    const tmpPath = path.join(DATA_DIR, 'entries.json')
+    if (!fsSync.existsSync(tmpPath)) {
+      const sourcePath = path.join(SOURCE_DATA_DIR, 'entries.json')
+      if (fsSync.existsSync(sourcePath)) {
+        await fs.copyFile(sourcePath, tmpPath)
+      } else {
+        await fs.writeFile(tmpPath, '[]', 'utf-8')
+      }
+    }
   }
 }
 
 // Get path to entries JSON file
 function getEntriesPath(): string {
-  return path.join(process.cwd(), 'data', 'entries.json')
+  return path.join(DATA_DIR, 'entries.json')
 }
 
 // Read entries from JSON file

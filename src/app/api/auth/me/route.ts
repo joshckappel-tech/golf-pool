@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSession, getUser } from '@/lib/db'
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,8 +13,20 @@ export async function GET(request: NextRequest) {
 
     const token = authHeader.substring(7) // Remove "Bearer " prefix
 
+    // Dynamic import to handle Vercel file system
+    let db: any
+    try {
+      db = await import('@/lib/db')
+    } catch (importErr) {
+      console.error('Failed to import db module:', importErr)
+      return NextResponse.json(
+        { error: 'Database initialization failed' },
+        { status: 503 }
+      )
+    }
+
     // Look up session
-    const session = getSession(token)
+    const session = db.getSession(token)
     if (!session) {
       return NextResponse.json(
         { error: 'Invalid or expired session' },
@@ -33,7 +44,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get user info
-    const user = getUser(session.userId)
+    const user = db.getUser(session.userId)
     if (!user) {
       return NextResponse.json(
         { error: 'User not found' },

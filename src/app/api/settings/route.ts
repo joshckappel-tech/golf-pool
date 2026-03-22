@@ -1,9 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSettings, saveSettings } from '@/lib/db'
 
 export async function GET() {
   try {
-    const settings = getSettings()
+    let db: any
+    try {
+      db = await import('@/lib/db')
+    } catch (importErr) {
+      console.error('Failed to import db module:', importErr)
+      return NextResponse.json(
+        { error: 'Database initialization failed' },
+        { status: 503 }
+      )
+    }
+
+    const settings = db.getSettings()
     return NextResponse.json(settings, { status: 200 })
   } catch (error) {
     console.error('GET /api/settings error:', error)
@@ -26,8 +36,19 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    let db: any
+    try {
+      db = await import('@/lib/db')
+    } catch (importErr) {
+      console.error('Failed to import db module:', importErr)
+      return NextResponse.json(
+        { error: 'Database initialization failed' },
+        { status: 503 }
+      )
+    }
+
     // Get current settings and merge with new data
-    const currentSettings = getSettings()
+    const currentSettings = db.getSettings()
     const updatedSettings = {
       ...currentSettings,
       ...body,
@@ -42,7 +63,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Save updated settings
-    saveSettings(updatedSettings)
+    db.saveSettings(updatedSettings)
 
     return NextResponse.json(updatedSettings, { status: 200 })
   } catch (error) {

@@ -1,24 +1,40 @@
 import { promises as fs } from 'fs';
+import fsSync from 'fs';
 import path from 'path';
+
+const IS_VERCEL = !!process.env.VERCEL;
+const SOURCE_DATA_DIR = path.join(process.cwd(), 'data');
+const DATA_DIR = IS_VERCEL ? '/tmp/golf-pool-data' : SOURCE_DATA_DIR;
 
 // Get path to scores JSON file
 function getScoresPath(): string {
-  return path.join(process.cwd(), 'data', 'scores.json');
+  return path.join(DATA_DIR, 'scores.json');
 }
 
 // Ensure data directory exists
 async function ensureDataDir() {
-  const dataDir = path.join(process.cwd(), 'data');
   try {
-    await fs.mkdir(dataDir, { recursive: true });
+    await fs.mkdir(DATA_DIR, { recursive: true });
   } catch (err) {
     // Directory already exists
+  }
+  if (IS_VERCEL) {
+    const tmpPath = path.join(DATA_DIR, 'scores.json');
+    if (!fsSync.existsSync(tmpPath)) {
+      const sourcePath = path.join(SOURCE_DATA_DIR, 'scores.json');
+      if (fsSync.existsSync(sourcePath)) {
+        await fs.copyFile(sourcePath, tmpPath);
+      } else {
+        await fs.writeFile(tmpPath, '[]', 'utf-8');
+      }
+    }
   }
 }
 
 // Read cached scores from JSON file
 async function readCachedScores(): Promise<any[]> {
   try {
+    await ensureDataDir();
     const filePath = getScoresPath();
     const data = await fs.readFile(filePath, 'utf-8');
     return JSON.parse(data);
@@ -47,22 +63,13 @@ async function writeScores(scores: any[]): Promise<void> {
 function parseEspnLeaderboard(html: string): any[] {
   const scores: any[] = [];
 
-  // Simple regex-based parsing for golfer scores from ESPN leaderboard
-  // This looks for patterns like: golfer name, position, score, etc.
-  // ESPN leaderboard typically has structure: <tr> elements with golfer data
-
   try {
-    // Match table rows containing golfer data
-    // Pattern: extract name, position, score to par
     const rowRegex = /<tr[^>]*>[\s\S]*?<\/tr>/g;
     const rows = html.match(rowRegex) || [];
 
     for (const row of rows) {
-      // Extract position
       const posMatch = row.match(/<td[^>]*>\s*(?:<[^>]*>)*(T?\d+|CUT|WD)(?:<[^>]*>)*\s*<\/td>/);
-      // Extract golfer name (usually in a link)
       const nameMatch = row.match(/<a[^>]*href="\/golf\/player[^"]*"[^>]*>([^<]+)<\/a>/);
-      // Extract score (look for negative numbers like -12, -5, or +5)
       const scoreMatch = row.match(/>(-?\d+)<\/td>/);
 
       if (nameMatch && scoreMatch) {
@@ -123,7 +130,6 @@ export async function GET() {
   } catch (err) {
     console.error('GET /api/scores/update error:', err);
 
-    // On any error, return cached scores
     try {
       const cachedScores = await readCachedScores();
       return Response.json(cachedScores, {
