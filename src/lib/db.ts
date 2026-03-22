@@ -31,6 +31,7 @@ export interface PoolSettings {
   poolPassword: string
   adminUsername: string
   adminPassword: string
+  payoutPcts?: number[] // 1st-10th place payout percentages
 }
 
 // On Vercel, the deployed file system is read-only. Use /tmp for writable storage.
@@ -54,6 +55,7 @@ const DEFAULT_FILES: { [key: string]: any } = {
     poolPassword: 'golf2026',
     adminUsername: 'admin',
     adminPassword: 'golfpool2026',
+    payoutPcts: [30, 15, 10, 8, 7, 6, 5, 4, 3, 0],
   } as PoolSettings,
 }
 
