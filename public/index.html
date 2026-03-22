@@ -197,6 +197,18 @@
             border: 1px solid rgba(59, 130, 246, 0.5);
         }
 
+        .status-complete {
+            background: rgba(34, 197, 94, 0.2);
+            color: #86efac;
+            border: 1px solid rgba(34, 197, 94, 0.5);
+        }
+
+        .status-setup {
+            background: rgba(100, 116, 139, 0.2);
+            color: #94a3b8;
+            border: 1px solid rgba(100, 116, 139, 0.5);
+        }
+
         .step-indicator {
             display: flex;
             justify-content: space-between;
@@ -631,6 +643,14 @@
                         </div>
                     </div>
                     <div id="tournamentInfoBar" style="margin-bottom:12px; padding:8px 12px; background:rgba(255,255,255,0.05); border-radius:8px; font-size:0.9rem; color:#e2e8f0;"></div>
+                    <!-- Entry Selector -->
+                    <div id="entryHighlightRow" style="margin-bottom:12px; padding:10px 14px; background:rgba(196,163,90,0.08); border:1px solid rgba(196,163,90,0.2); border-radius:8px; display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                        <label style="font-size:0.85rem; font-weight:600; color:#c4a35a; white-space:nowrap;">Highlight Entry:</label>
+                        <select id="entryHighlightSelect" class="search-input" style="max-width:260px; flex:1;" onchange="onEntryHighlightChange()">
+                            <option value="">— Select an entry —</option>
+                        </select>
+                        <span id="entryHighlightInfo" style="font-size:0.8rem; color:#94a3b8;"></span>
+                    </div>
                     <div class="flex gap-4 mb-4">
                         <input type="text" id="tournamentSearchInput" class="search-input flex-1" placeholder="Search golfer..." onkeyup="filterTournamentLeaderboard()">
                         <select id="tournamentFilterGroup" class="search-input" style="max-width:180px;" onchange="filterTournamentLeaderboard()">
@@ -1497,6 +1517,12 @@
                     if (feeEl) feeEl.value = '$' + poolSettings.entryFee + '.00';
                     onEntryFeeChange();
                     renderAdminPayoutRows();
+                    // Sync TeamStake URL
+                    if (poolSettings.teamStakeUrl) {
+                        leagueSafeUrl = poolSettings.teamStakeUrl;
+                        const tsEl = document.getElementById('admin-leaguesafe-url');
+                        if (tsEl) tsEl.value = poolSettings.teamStakeUrl;
+                    }
                 }
             }).catch(() => {});
         });
@@ -1623,6 +1649,30 @@
                 liveScoresReady = true;
             }
             livePrizeMap = calculateProjectedPrizes(tournamentScores);
+
+            // Update round status badge from live data
+            const t = data?.tournament;
+            if (t) {
+                const statusEl = document.getElementById('tournament-round-status');
+                if (statusEl && t.roundDisplay) {
+                    statusEl.textContent = t.roundDisplay;
+                    // Update badge color
+                    statusEl.className = 'status-badge';
+                    if (t.roundState === 'in_progress') {
+                        statusEl.classList.add('status-in-progress');
+                    } else if (t.roundState === 'complete' || t.roundDisplay === 'Final') {
+                        statusEl.classList.add('status-complete');
+                    } else {
+                        statusEl.classList.add('status-setup');
+                    }
+                }
+                // Update purse display
+                if (t.purse) {
+                    const purseEl = document.getElementById('purseDisplay');
+                    if (purseEl) purseEl.textContent = 'Total Purse: $' + t.purse.toLocaleString();
+                }
+            }
+
             return { tournament: data?.tournament || null, lastUpdated: data?.lastUpdated || null };
         }
 
@@ -2311,7 +2361,7 @@
 
         // Submit entry: save picks, then prompt payment via TeamStake
         function submitEntry() {
-            const lsUrl = (document.getElementById('admin-leaguesafe-url') || {}).value || leagueSafeUrl;
+            const lsUrl = poolSettings.teamStakeUrl || (document.getElementById('admin-leaguesafe-url') || {}).value || leagueSafeUrl || '';
             const hasLsUrl = lsUrl.trim().length > 0;
 
             // Save the entry (in production this would POST to an API)
@@ -2647,16 +2697,75 @@
         }
 
         let autoRefreshInterval = null;
+        let selectedEntryGolfers = []; // names of golfers in the selected entry
+        let selectedEntryWildCards = []; // names of wild card golfers (shown differently)
+        let entriesCache = []; // cached entries for dropdown
+
+        async function loadEntrySelector() {
+            const sel = document.getElementById('entryHighlightSelect');
+            if (!sel) return;
+            try {
+                const res = await fetch('/api/entries');
+                if (res.ok) {
+                    entriesCache = await res.json();
+                    // Keep existing selection
+                    const prev = sel.value;
+                    sel.innerHTML = '<option value="">— Select an entry —</option>';
+                    entriesCache.forEach((e, i) => {
+                        const opt = document.createElement('option');
+                        opt.value = i.toString();
+                        opt.textContent = e.name || e.entrantName || ('Entry ' + (i + 1));
+                        sel.appendChild(opt);
+                    });
+                    if (prev) sel.value = prev;
+                }
+            } catch (e) { console.log('Could not load entries for selector:', e); }
+        }
+
+        function onEntryHighlightChange() {
+            const sel = document.getElementById('entryHighlightSelect');
+            const infoEl = document.getElementById('entryHighlightInfo');
+            const idx = sel ? parseInt(sel.value) : -1;
+            if (isNaN(idx) || idx < 0 || idx >= entriesCache.length) {
+                selectedEntryGolfers = [];
+                selectedEntryWildCards = [];
+                if (infoEl) infoEl.innerHTML = '';
+                drawTournamentRows(lastTournamentInfo, lastUpdatedTime);
+                return;
+            }
+            const entry = entriesCache[idx];
+            const pickA = entry.groupA || entry.pickGroupA || '';
+            const pickB = entry.groupB || entry.pickGroupB || '';
+            const pickC = entry.groupC || entry.pickGroupC || '';
+            const pickD = entry.groupD || entry.pickGroupD || '';
+            const wc1 = entry.wildCard1 || entry.wc1 || '';
+            const wc2 = entry.wildCard2 || entry.wc2 || '';
+            selectedEntryGolfers = [pickA, pickB, pickC, pickD, wc1, wc2].filter(Boolean);
+            selectedEntryWildCards = [wc1, wc2].filter(Boolean);
+            if (infoEl) {
+                infoEl.innerHTML = selectedEntryGolfers.length + ' golfers &middot; WC: ' + (selectedEntryWildCards.join(', ') || 'none');
+            }
+            drawTournamentRows(lastTournamentInfo, lastUpdatedTime);
+        }
+
+        // Store last tournament info for re-render on highlight change
+        let lastTournamentInfo = null;
+        let lastUpdatedTime = null;
 
         function renderTournamentLeaderboard() {
             const tbody = document.getElementById('tournamentLeaderboardBody');
             if (!tbody) return;
+
+            // Load entries for the highlight selector
+            loadEntrySelector();
 
             // ALWAYS render immediately from whatever data we have (hardcoded or cached)
             drawTournamentRows(null, null);
 
             // Then try to fetch live data in the background and re-render
             loadLiveScores().then(({ tournament: tournamentInfo, lastUpdated }) => {
+                lastTournamentInfo = tournamentInfo;
+                lastUpdatedTime = lastUpdated;
                 drawTournamentRows(tournamentInfo, lastUpdated);
             });
 
@@ -2664,6 +2773,8 @@
             if (!autoRefreshInterval) {
                 autoRefreshInterval = setInterval(() => {
                     loadLiveScores().then(({ tournament: tournamentInfo, lastUpdated }) => {
+                        lastTournamentInfo = tournamentInfo;
+                        lastUpdatedTime = lastUpdated;
                         drawTournamentRows(tournamentInfo, lastUpdated);
                         if (leaderboardData.length > 0) {
                             loadAndRenderPoolLeaderboard();
@@ -2698,6 +2809,7 @@
             // Render the leaderboard rows
             const prizeMap = livePrizeMap && Object.keys(livePrizeMap).length > 0 ? livePrizeMap : calculateProjectedPrizes(tournamentScores);
 
+            const hasHighlight = selectedEntryGolfers.length > 0;
             let html = '';
             tournamentScores.forEach((p, idx) => {
                 const group = getGolferGroup(p.name);
@@ -2710,14 +2822,26 @@
                 const groupColor = group === 'A' ? '#c4a35a' : group === 'B' ? '#16a34a' : group === 'C' ? '#3b82f6' : group === 'D' ? '#a855f7' : '#64748b';
                 const groupLabel = group === 'WC' ? 'WC' : group;
 
+                // Entry highlighting
+                const isInEntry = hasHighlight && selectedEntryGolfers.includes(p.name);
+                const isWildCard = hasHighlight && selectedEntryWildCards.includes(p.name);
+
                 let rowClass = '';
                 if (!isCut && idx === 0) rowClass = 'rank-1';
                 else if (!isCut && idx < 10) rowClass = 'rank-2-8';
-                const cutStyle = isCut ? 'opacity: 0.5;' : '';
 
-                html += `<tr class="${rowClass}" style="${cutStyle}" data-name="${p.name.toLowerCase()}" data-group="${group}" data-status="${p.status}">
+                let rowStyle = '';
+                if (isCut && !isInEntry) rowStyle = 'opacity: 0.5;';
+                else if (isCut && isInEntry) rowStyle = 'opacity: 0.7;';
+                if (hasHighlight && !isInEntry) rowStyle += ' opacity: 0.35;';
+                if (isInEntry) rowStyle += ' background: rgba(196,163,90,0.12); border-left: 3px solid #c4a35a;';
+                if (isWildCard) rowStyle += ' background: rgba(196,163,90,0.2);';
+
+                const nameExtra = isWildCard ? ' <span style="font-size:0.65rem; color:#c4a35a; font-weight:700; vertical-align:super;">2x</span>' : (isInEntry ? ' <span style="font-size:0.65rem; color:#c4a35a; vertical-align:super;">&#9733;</span>' : '');
+
+                html += `<tr class="${rowClass}" style="${rowStyle}" data-name="${p.name.toLowerCase()}" data-group="${group}" data-status="${p.status}">
                     <td class="font-bold">${p.pos}</td>
-                    <td class="font-semibold">${p.name}</td>
+                    <td class="font-semibold">${p.name}${nameExtra}</td>
                     <td><span style="background:${groupColor}22; color:${groupColor}; border:1px solid ${groupColor}55; padding:2px 8px; border-radius:4px; font-size:0.75rem; font-weight:600;">${groupLabel}</span></td>
                     <td class="font-bold" style="color:${p.score !== null && p.score < 0 ? '#ef4444' : p.score === 0 ? '#f8fafc' : '#22c55e'}">${scoreStr}</td>
                     <td style="color:${p.today !== null && p.today !== undefined && p.today < 0 ? '#ef4444' : p.today === 0 ? '#f8fafc' : '#22c55e'}">${todayStr}</td>
@@ -2761,6 +2885,7 @@
             submissionDeadline: '2026-03-19T07:00:00Z',
             entryFee: 30,
             poolPassword: 'golf2026',
+            teamStakeUrl: '',
             payoutPcts: [30, 15, 10, 8, 7, 6, 5, 4, 3, 0], // 1st-10th, 0 = no payout
         };
 
@@ -3262,8 +3387,9 @@
             // Show confirmation
             const el = document.getElementById('entry-main-content');
             const tb = entryPicks.tiebreaker !== null ? formatScore(entryPicks.tiebreaker) : '—';
-            const lsUrl = (document.getElementById('admin-leaguesafe-url') || {}).value || leagueSafeUrl;
+            const lsUrl = poolSettings.teamStakeUrl || (document.getElementById('admin-leaguesafe-url') || {}).value || leagueSafeUrl || '';
             const hasLsUrl = lsUrl.trim().length > 0;
+            const fee = poolSettings.entryFee || 30;
 
             el.innerHTML = `
                 <div class="stat-card max-w-lg">
@@ -3278,7 +3404,7 @@
                         <p class="text-sm text-slate-300"><strong>Wild Cards (2x):</strong> ${entryPicks.WC1}, ${entryPicks.WC2}</p>
                         <p class="text-sm text-slate-300"><strong>Tiebreaker:</strong> ${tb}</p>
                     </div>
-                    ${!isEdit ? '<div class="p-4 rounded mb-4" style="background:rgba(196,163,90,0.1); border:1px solid rgba(196,163,90,0.3);"><h4 class="font-bold mb-2" style="color:#c4a35a;">Step 2: Complete Payment</h4><p class="text-sm text-slate-300 mb-4">Pay your $30.00 entry fee securely through TeamStake. Your entry will be confirmed once payment is received.</p>' + (hasLsUrl ? '<a href="' + lsUrl.trim() + '" target="_blank" rel="noopener noreferrer" class="button-primary block text-center w-full" style="font-size:1.1rem;padding:14px;text-decoration:none;display:block;">Pay $30.00 via TeamStake &#8599;</a>' : '<div class="p-3 rounded text-center" style="background:rgba(100,116,139,0.2); border:1px solid rgba(100,116,139,0.3);"><p class="text-sm text-slate-400">TeamStake payment link not yet configured. Contact the pool commissioner to make your payment.</p></div>') + '</div>' : ''}
+                    ${!isEdit ? '<div class="p-4 rounded mb-4" style="background:rgba(196,163,90,0.1); border:1px solid rgba(196,163,90,0.3);"><h4 class="font-bold mb-2" style="color:#c4a35a;">Step 2: Complete Payment</h4><p class="text-sm text-slate-300 mb-4">Pay your $' + fee + '.00 entry fee securely through TeamStake. Your entry will be confirmed once payment is received.</p>' + (hasLsUrl ? '<a href="' + lsUrl.trim() + '" target="_blank" rel="noopener noreferrer" class="button-primary block text-center w-full" style="font-size:1.1rem;padding:14px;text-decoration:none;display:block;">Pay $' + fee + '.00 via TeamStake &#8599;</a>' : '<div class="p-3 rounded text-center" style="background:rgba(100,116,139,0.2); border:1px solid rgba(100,116,139,0.3);"><p class="text-sm text-slate-400">TeamStake payment link not yet configured. Contact the pool commissioner to make your payment.</p></div>') + '</div>' : ''}
                     <div class="text-center mt-4">
                         ${currentUser ? '<button class="button-secondary mr-2" onclick="goToTab(\'myentries\')">View My Entries</button>' : ''}
                         <button class="button-secondary" onclick="resetEntry()">Submit Another Entry</button>

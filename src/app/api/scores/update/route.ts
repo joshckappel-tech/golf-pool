@@ -74,21 +74,50 @@ function parseEspnApiResponse(data: any): any {
     }
 
     const event = events[0];
+
+    // Determine round status from competition
+    const competitions = event.competitions || [];
+    const competition = competitions.length > 0 ? competitions[0] : null;
+
+    // Extract round/status info
+    let roundDisplay = '';
+    let roundNumber = 0;
+    let roundState = 'unknown'; // 'in_progress', 'complete', 'not_started'
+    if (competition) {
+      const compStatus = competition.status || {};
+      const compType = compStatus.type || {};
+      roundNumber = compStatus.period || 0;
+      const stateName = (compType.state || '').toLowerCase();
+      const stateDesc = compType.description || '';
+
+      if (stateName === 'in' || stateDesc.toLowerCase().includes('in progress')) {
+        roundState = 'in_progress';
+        roundDisplay = `Round ${roundNumber} - In Progress`;
+      } else if (stateName === 'post' || stateDesc.toLowerCase().includes('final') || stateDesc.toLowerCase().includes('complete')) {
+        roundState = 'complete';
+        roundDisplay = roundNumber >= 4 ? 'Final' : `Round ${roundNumber} - Complete`;
+      } else if (stateName === 'pre') {
+        roundState = 'not_started';
+        roundDisplay = roundNumber > 0 ? `Round ${roundNumber} - Not Started` : 'Not Started';
+      } else {
+        roundDisplay = stateDesc || 'Unknown';
+      }
+    }
+
     result.tournament = {
       name: event.name || event.shortName || 'Unknown Tournament',
       status: event.status?.type?.description || 'Unknown',
+      roundDisplay,
+      roundNumber,
+      roundState,
       startDate: event.date || null,
-      purse: null, // Will extract from competitions if available
+      purse: null,
     };
 
-    // Get competition data (the actual tournament)
-    const competitions = event.competitions || [];
-    if (competitions.length === 0) {
+    if (!competition) {
       console.log('No competitions found in event');
       return result;
     }
-
-    const competition = competitions[0];
 
     // Extract purse if available
     if (competition.purse) {
@@ -144,10 +173,14 @@ function parseEspnApiResponse(data: any): any {
           }
         }
 
-        // Get thru (holes completed)
-        const thru = status.thru?.toString() ||
-                     status.period?.toString() ||
-                     (status.type?.description === 'Final' ? 'F' : '--');
+        // Get thru (holes completed in current round)
+        let thru: string = '--';
+        const statusThru = status.thru;
+        if (statusThru !== undefined && statusThru !== null) {
+          thru = statusThru === 18 ? 'F' : statusThru.toString();
+        } else if (status.type?.description === 'Final' || status.type?.state === 'post') {
+          thru = 'F';
+        }
 
         // Get round scores from linescores
         const linescores = competitor.linescores || [];
@@ -155,6 +188,20 @@ function parseEspnApiResponse(data: any): any {
           const val = ls.value !== undefined ? ls.value : ls.displayValue;
           return val !== undefined && val !== null && val !== '--' ? Number(val) : null;
         });
+
+        // Calculate "today" score (current round score to par)
+        // ESPN provides par per round in linescores or we default to 71 for Copperhead
+        let today: number | null = null;
+        const currentRoundIdx = roundNumber > 0 ? roundNumber - 1 : linescores.length - 1;
+        if (currentRoundIdx >= 0 && currentRoundIdx < linescores.length) {
+          const currentRoundLs = linescores[currentRoundIdx];
+          const roundStrokes = currentRoundLs?.value !== undefined ? Number(currentRoundLs.value) : null;
+          if (roundStrokes !== null && !isNaN(roundStrokes)) {
+            // Try to get par for the round from linescore, otherwise use default (71 for Copperhead)
+            const roundPar = currentRoundLs?.par || 71;
+            today = roundStrokes - roundPar;
+          }
+        }
 
         // Determine status (active, cut, withdrawn)
         let playerStatus = 'active';
@@ -184,6 +231,7 @@ function parseEspnApiResponse(data: any): any {
           pos: position,
           score: scoreToPar,
           scoreDisplay,
+          today,
           thru,
           rounds,
           totalStrokes,
