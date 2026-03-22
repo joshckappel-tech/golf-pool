@@ -57,6 +57,15 @@ async function writeScores(scores: any): Promise<void> {
   }
 }
 
+// Parse a score display string to a number
+function parseScoreDisplay(s: string): number | null {
+  if (!s) return null;
+  const trimmed = s.trim();
+  if (trimmed === 'E' || trimmed === 'Even' || trimmed === 'even') return 0;
+  const n = parseInt(trimmed, 10);
+  return isNaN(n) ? null : n;
+}
+
 // Parse ESPN JSON API response into our format
 function parseEspnApiResponse(data: any): any {
   const result: any = {
@@ -66,7 +75,6 @@ function parseEspnApiResponse(data: any): any {
   };
 
   try {
-    // Get the current/most recent event
     const events = data?.events || [];
     if (events.length === 0) {
       console.log('No events found in ESPN API response');
@@ -74,33 +82,32 @@ function parseEspnApiResponse(data: any): any {
     }
 
     const event = events[0];
-
-    // Determine round status from competition
     const competitions = event.competitions || [];
     const competition = competitions.length > 0 ? competitions[0] : null;
 
-    // Extract round/status info
+    // ---- Tournament-level info ----
     let roundDisplay = '';
     let roundNumber = 0;
-    let roundState = 'unknown'; // 'in_progress', 'complete', 'not_started'
-    if (competition) {
-      const compStatus = competition.status || {};
-      const compType = compStatus.type || {};
-      roundNumber = compStatus.period || 0;
-      const stateName = (compType.state || '').toLowerCase();
-      const stateDesc = compType.description || '';
+    let roundState = 'unknown';
 
-      if (stateName === 'in' || stateDesc.toLowerCase().includes('in progress')) {
+    if (competition) {
+      const cs = competition.status || {};
+      const ct = cs.type || {};
+      roundNumber = cs.period || 0;
+      const state = (ct.state || '').toLowerCase();
+      const desc = ct.description || '';
+
+      if (state === 'in' || desc.toLowerCase().includes('in progress')) {
         roundState = 'in_progress';
         roundDisplay = `Round ${roundNumber} - In Progress`;
-      } else if (stateName === 'post' || stateDesc.toLowerCase().includes('final') || stateDesc.toLowerCase().includes('complete')) {
+      } else if (state === 'post' || desc.toLowerCase().includes('final') || desc.toLowerCase().includes('complete')) {
         roundState = 'complete';
         roundDisplay = roundNumber >= 4 ? 'Final' : `Round ${roundNumber} - Complete`;
-      } else if (stateName === 'pre') {
+      } else if (state === 'pre') {
         roundState = 'not_started';
         roundDisplay = roundNumber > 0 ? `Round ${roundNumber} - Not Started` : 'Not Started';
       } else {
-        roundDisplay = stateDesc || 'Unknown';
+        roundDisplay = desc || 'Unknown';
       }
     }
 
@@ -111,113 +118,71 @@ function parseEspnApiResponse(data: any): any {
       roundNumber,
       roundState,
       startDate: event.date || null,
-      purse: null,
+      purse: competition?.purse || null,
     };
 
-    if (!competition) {
-      console.log('No competitions found in event');
-      return result;
-    }
+    if (!competition) return result;
 
-    // Extract purse if available
-    if (competition.purse) {
-      result.tournament.purse = competition.purse;
-    }
-
-    // Extract competitor/player data
     const competitors = competition.competitors || [];
+    console.log(`ESPN API: Parsing ${competitors.length} competitors for round ${roundNumber} (${roundState})`);
 
-    for (const competitor of competitors) {
+    for (const c of competitors) {
       try {
-        const athlete = competitor.athlete || {};
-        const status = competitor.status || {};
+        const athlete = c.athlete || {};
+        const status = c.status || {};
+        const stats = c.statistics || [];
+        const linescores = c.linescores || [];
 
-        // Get player name
+        // Name
         const name = athlete.displayName || athlete.shortName || 'Unknown';
 
-        // Get position
-        const position = status.position?.displayName ||
-                         status.position?.id?.toString() ||
-                         competitor.place?.toString() ||
-                         '--';
-
-        // Get score to par - look in multiple places
-        let scoreToPar: number | null = null;
-        let scoreDisplay: string = 'E';
-
-        // Try competitor.score first
-        if (competitor.score !== undefined && competitor.score !== null) {
-          if (typeof competitor.score === 'object') {
-            scoreDisplay = competitor.score.displayValue || 'E';
-          } else {
-            scoreDisplay = competitor.score.toString();
-          }
+        // Position — ESPN uses status.position or competitor.place
+        let pos = '--';
+        if (status.position?.displayName) {
+          pos = status.position.displayName;
+        } else if (status.position?.id) {
+          pos = status.position.id.toString();
+        } else if (c.place !== undefined && c.place !== null) {
+          pos = c.place.toString();
         }
 
-        // Try statistics array for scoreToPar
-        const stats = competitor.statistics || [];
+        // Overall score to par
+        let scoreToPar: number | null = null;
+        let scoreDisplay = 'E';
+
+        // Method 1: statistics array (most reliable)
         for (const stat of stats) {
           if (stat.name === 'scoreToPar' || stat.abbreviation === 'TOPAR') {
             scoreDisplay = stat.displayValue || scoreDisplay;
             break;
           }
         }
+        // Method 2: competitor.score
+        if (scoreDisplay === 'E' && c.score !== undefined && c.score !== null) {
+          scoreDisplay = typeof c.score === 'object' ? (c.score.displayValue || 'E') : c.score.toString();
+        }
+        scoreToPar = parseScoreDisplay(scoreDisplay);
 
-        // Parse score display to number
-        if (scoreDisplay === 'E' || scoreDisplay === 'Even') {
-          scoreToPar = 0;
+        // Thru — holes completed in current round
+        let thru = '--';
+        if (status.thru !== undefined && status.thru !== null) {
+          thru = Number(status.thru) === 18 ? 'F' : status.thru.toString();
         } else {
-          const parsed = parseInt(scoreDisplay, 10);
-          if (!isNaN(parsed)) {
-            scoreToPar = parsed;
+          // If round is complete (post state) and player is active, they finished
+          const pState = (status.type?.state || '').toLowerCase();
+          const pDesc = (status.type?.description || '').toLowerCase();
+          if (pState === 'post' || pDesc.includes('complete') || pDesc === 'final') {
+            thru = 'F';
           }
         }
 
-        // Get thru (holes completed in current round)
-        let thru: string = '--';
-        const statusThru = status.thru;
-        if (statusThru !== undefined && statusThru !== null) {
-          thru = statusThru === 18 ? 'F' : statusThru.toString();
-        } else if (status.type?.description === 'Final' || status.type?.state === 'post') {
-          thru = 'F';
-        }
+        // Round scores from linescores
+        const r1 = linescores[0]?.value !== undefined ? Number(linescores[0].value) : null;
+        const r2 = linescores[1]?.value !== undefined ? Number(linescores[1].value) : null;
+        const r3 = linescores[2]?.value !== undefined ? Number(linescores[2].value) : null;
+        const r4 = linescores[3]?.value !== undefined ? Number(linescores[3].value) : null;
 
-        // Get round scores from linescores
-        const linescores = competitor.linescores || [];
-        const rounds: (number | null)[] = linescores.map((ls: any) => {
-          const val = ls.value !== undefined ? ls.value : ls.displayValue;
-          return val !== undefined && val !== null && val !== '--' ? Number(val) : null;
-        });
-
-        // Calculate "today" score (current round score to par)
-        // ESPN provides par per round in linescores or we default to 71 for Copperhead
-        let today: number | null = null;
-        const currentRoundIdx = roundNumber > 0 ? roundNumber - 1 : linescores.length - 1;
-        if (currentRoundIdx >= 0 && currentRoundIdx < linescores.length) {
-          const currentRoundLs = linescores[currentRoundIdx];
-          const roundStrokes = currentRoundLs?.value !== undefined ? Number(currentRoundLs.value) : null;
-          if (roundStrokes !== null && !isNaN(roundStrokes)) {
-            // Try to get par for the round from linescore, otherwise use default (71 for Copperhead)
-            const roundPar = currentRoundLs?.par || 71;
-            today = roundStrokes - roundPar;
-          }
-        }
-
-        // Determine status (active, cut, withdrawn)
-        let playerStatus = 'active';
-        const statusType = status.type?.description?.toLowerCase() || '';
-        const displayStatus = status.displayValue?.toLowerCase() || '';
-
-        if (statusType.includes('cut') || displayStatus.includes('cut') || position === 'CUT') {
-          playerStatus = 'cut';
-        } else if (statusType.includes('wd') || displayStatus.includes('wd') ||
-                   statusType.includes('withdraw') || position === 'WD') {
-          playerStatus = 'withdrawn';
-        } else if (statusType.includes('dq') || displayStatus.includes('dq') || position === 'DQ') {
-          playerStatus = 'disqualified';
-        }
-
-        // Get total strokes
+        // Total strokes
         let totalStrokes: number | null = null;
         for (const stat of stats) {
           if (stat.name === 'strokes' || stat.abbreviation === 'TOT') {
@@ -225,29 +190,58 @@ function parseEspnApiResponse(data: any): any {
             break;
           }
         }
+        // Fallback: sum up all round scores
+        if (totalStrokes === null) {
+          const rounds = [r1, r2, r3, r4].filter(r => r !== null && !isNaN(r as number));
+          if (rounds.length > 0) totalStrokes = rounds.reduce((a, b) => (a as number) + (b as number), 0) as number;
+        }
+
+        // Today — current round score to par
+        let today: number | null = null;
+        const curIdx = roundNumber > 0 ? roundNumber - 1 : linescores.length - 1;
+        if (curIdx >= 0 && curIdx < linescores.length) {
+          const ls = linescores[curIdx];
+          const strokes = ls?.value !== undefined ? Number(ls.value) : null;
+          if (strokes !== null && !isNaN(strokes)) {
+            // Par from the linescore or default 71 (Copperhead)
+            const par = ls?.par || 71;
+            today = strokes - par;
+          }
+        }
+
+        // Player status (active, cut, withdrawn, disqualified)
+        let playerStatus = 'active';
+        const sType = (status.type?.description || '').toLowerCase();
+        const sDisp = (status.displayValue || '').toLowerCase();
+        if (sType.includes('cut') || sDisp.includes('cut') || pos === 'CUT') {
+          playerStatus = 'cut';
+        } else if (sType.includes('wd') || sDisp.includes('wd') || sType.includes('withdraw') || pos === 'WD') {
+          playerStatus = 'withdrawn';
+        } else if (sType.includes('dq') || sDisp.includes('dq') || pos === 'DQ') {
+          playerStatus = 'disqualified';
+        }
 
         result.players.push({
           name,
-          pos: position,
+          pos,
           score: scoreToPar,
           scoreDisplay,
           today,
           thru,
-          rounds,
+          r1, r2, r3, r4,
           totalStrokes,
           status: playerStatus,
           country: athlete.flag?.alt || null,
         });
       } catch (playerErr) {
         console.error('Error parsing player:', playerErr);
-        // Skip this player but continue with others
       }
     }
 
-    // Sort by position (numerical positions first, then CUT/WD/DQ)
+    // Sort: numerical positions first, then CUT/WD/DQ
     result.players.sort((a: any, b: any) => {
-      const posA = parseInt(a.pos.replace('T', ''), 10);
-      const posB = parseInt(b.pos.replace('T', ''), 10);
+      const posA = parseInt(String(a.pos).replace('T', ''), 10);
+      const posB = parseInt(String(b.pos).replace('T', ''), 10);
       if (!isNaN(posA) && !isNaN(posB)) return posA - posB;
       if (!isNaN(posA)) return -1;
       if (!isNaN(posB)) return 1;
@@ -263,12 +257,8 @@ function parseEspnApiResponse(data: any): any {
 
 export async function GET() {
   try {
-    // Fetch from ESPN's public JSON API
     const response = await fetch(ESPN_API_URL, {
-      headers: {
-        'Accept': 'application/json',
-      },
-      // Don't cache on the server side so we get fresh data
+      headers: { 'Accept': 'application/json' },
       cache: 'no-store',
     });
 
@@ -279,18 +269,14 @@ export async function GET() {
     }
 
     const apiData = await response.json();
-
-    // Parse the JSON response
     const scores = parseEspnApiResponse(apiData);
 
-    // Only save if we actually got player data
+    console.log(`Parsed ${scores.players.length} players, tournament: ${scores.tournament?.roundDisplay}`);
+
     if (scores.players.length > 0) {
       await writeScores(scores);
-
       return Response.json(scores, {
-        headers: {
-          'Cache-Control': 'public, max-age=300', // Cache for 5 minutes
-        },
+        headers: { 'Cache-Control': 'public, max-age=300' },
       });
     } else {
       console.log('No players parsed from ESPN API, returning cached scores');
@@ -299,13 +285,10 @@ export async function GET() {
     }
   } catch (err) {
     console.error('GET /api/scores/update error:', err);
-
     try {
       const cachedScores = await readCachedScores();
       return Response.json(cachedScores, {
-        headers: {
-          'Cache-Control': 'public, max-age=60',
-        },
+        headers: { 'Cache-Control': 'public, max-age=60' },
       });
     } catch (cacheErr) {
       return Response.json({ players: [], tournament: null, lastUpdated: null }, { status: 500 });

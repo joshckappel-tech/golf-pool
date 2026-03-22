@@ -634,7 +634,7 @@
                 <div class="mb-6">
                     <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
                         <div>
-                            <h2 class="text-3xl font-bold mb-2">2026 Valspar Championship</h2>
+                            <h2 id="tournamentNameDisplay" class="text-3xl font-bold mb-2">2026 Valspar Championship</h2>
                             <p class="text-slate-400">Copperhead Course at Innisbrook Resort</p>
                         </div>
                         <div class="text-right">
@@ -669,18 +669,18 @@
                     <table class="leaderboard-table">
                         <thead>
                             <tr>
-                                <th style="width:50px;">Pos</th>
-                                <th>Player</th>
-                                <th style="width:70px;">Group</th>
-                                <th style="width:70px;">Score</th>
-                                <th style="width:60px;">Today</th>
-                                <th style="width:50px;">Thru</th>
-                                <th style="width:50px;">R1</th>
-                                <th style="width:50px;">R2</th>
-                                <th style="width:50px;">R3</th>
-                                <th style="width:50px;">R4</th>
-                                <th style="width:70px;">Tot</th>
-                                <th style="width:120px;">Proj. Prize $</th>
+                                <th style="width:50px;">POS</th>
+                                <th>PLAYER</th>
+                                <th style="width:55px;">GRP</th>
+                                <th style="width:70px;">SCORE</th>
+                                <th style="width:60px;">TODAY</th>
+                                <th style="width:50px;">THRU</th>
+                                <th style="width:45px;">R1</th>
+                                <th style="width:45px;">R2</th>
+                                <th style="width:45px;">R3</th>
+                                <th style="width:45px;">R4</th>
+                                <th style="width:55px;">TOT</th>
+                                <th style="width:110px;">PROJ. PRIZE</th>
                             </tr>
                         </thead>
                         <tbody id="tournamentLeaderboardBody">
@@ -1627,53 +1627,52 @@
                     scoreDisplay: p.scoreDisplay || formatScoreToPar(p.score),
                     today: p.today !== undefined ? p.today : null,
                     thru: p.thru || '--',
-                    r1: p.rounds ? p.rounds[0] : (p.r1 || null),
-                    r2: p.rounds ? p.rounds[1] : (p.r2 || null),
-                    r3: p.rounds ? p.rounds[2] : (p.r3 || null),
-                    r4: p.rounds ? p.rounds[3] : (p.r4 || null),
+                    r1: p.r1 !== undefined ? p.r1 : (p.rounds ? p.rounds[0] : null),
+                    r2: p.r2 !== undefined ? p.r2 : (p.rounds ? p.rounds[1] : null),
+                    r3: p.r3 !== undefined ? p.r3 : (p.rounds ? p.rounds[2] : null),
+                    r4: p.r4 !== undefined ? p.r4 : (p.rounds ? p.rounds[3] : null),
                     tot: p.totalStrokes || p.tot || null,
                     status: p.status || 'active',
                 }));
                 tournamentScores.length = 0;
                 tournamentScores.push(...players);
                 liveScoresReady = true;
-
-                if (data.tournament && data.tournament.purse) {
-                    TOTAL_PURSE = data.tournament.purse;
-                    const purseEl = document.getElementById('purseDisplay');
-                    if (purseEl) purseEl.textContent = 'Total Purse: $' + TOTAL_PURSE.toLocaleString();
-                }
+                console.log('Live scores loaded:', players.length, 'players. Sample:', players[0]?.name, 'score:', players[0]?.score, 'today:', players[0]?.today, 'thru:', players[0]?.thru);
             } else if (data && Array.isArray(data) && data.length > 0) {
                 tournamentScores.length = 0;
                 tournamentScores.push(...data);
                 liveScoresReady = true;
             }
+
+            // Recalculate projected prizes every time scores update
             livePrizeMap = calculateProjectedPrizes(tournamentScores);
 
-            // Update round status badge from live data
+            // Update tournament header from live data
             const t = data?.tournament;
             if (t) {
+                // Round status badge
                 const statusEl = document.getElementById('tournament-round-status');
                 if (statusEl && t.roundDisplay) {
                     statusEl.textContent = t.roundDisplay;
-                    // Update badge color
                     statusEl.className = 'status-badge';
-                    if (t.roundState === 'in_progress') {
-                        statusEl.classList.add('status-in-progress');
-                    } else if (t.roundState === 'complete' || t.roundDisplay === 'Final') {
-                        statusEl.classList.add('status-complete');
-                    } else {
-                        statusEl.classList.add('status-setup');
-                    }
+                    if (t.roundState === 'in_progress') statusEl.classList.add('status-in-progress');
+                    else if (t.roundState === 'complete' || t.roundDisplay === 'Final') statusEl.classList.add('status-complete');
+                    else statusEl.classList.add('status-setup');
                 }
-                // Update purse display
+                // Purse display
                 if (t.purse) {
+                    TOTAL_PURSE = t.purse;
                     const purseEl = document.getElementById('purseDisplay');
-                    if (purseEl) purseEl.textContent = 'Total Purse: $' + t.purse.toLocaleString();
+                    if (purseEl) purseEl.textContent = 'Total Purse: $' + TOTAL_PURSE.toLocaleString();
+                }
+                // Tournament name
+                if (t.name) {
+                    const nameEl = document.getElementById('tournamentNameDisplay');
+                    if (nameEl) nameEl.textContent = t.name;
                 }
             }
 
-            return { tournament: data?.tournament || null, lastUpdated: data?.lastUpdated || null };
+            return { tournament: t || null, lastUpdated: data?.lastUpdated || null };
         }
 
         async function loadLiveScores() {
@@ -2759,26 +2758,30 @@
             // Load entries for the highlight selector
             loadEntrySelector();
 
-            // ALWAYS render immediately from whatever data we have (hardcoded or cached)
-            drawTournamentRows(null, null);
+            // Show loading state
+            tbody.innerHTML = '<tr><td colspan="12" style="text-align:center; padding:20px; color:#94a3b8;">Loading live scores from ESPN...</td></tr>';
 
-            // Then try to fetch live data in the background and re-render
+            // Fetch live data, then render
             loadLiveScores().then(({ tournament: tournamentInfo, lastUpdated }) => {
                 lastTournamentInfo = tournamentInfo;
                 lastUpdatedTime = lastUpdated;
                 drawTournamentRows(tournamentInfo, lastUpdated);
+                // Also refresh pool leaderboard with updated prize data
+                loadAndRenderPoolLeaderboard();
+            }).catch(() => {
+                // Fallback: render from hardcoded data
+                drawTournamentRows(null, null);
             });
 
-            // Set up auto-refresh every 5 minutes if not already running
+            // Set up auto-refresh every 5 minutes
             if (!autoRefreshInterval) {
                 autoRefreshInterval = setInterval(() => {
                     loadLiveScores().then(({ tournament: tournamentInfo, lastUpdated }) => {
                         lastTournamentInfo = tournamentInfo;
                         lastUpdatedTime = lastUpdated;
                         drawTournamentRows(tournamentInfo, lastUpdated);
-                        if (leaderboardData.length > 0) {
-                            loadAndRenderPoolLeaderboard();
-                        }
+                        // Always refresh pool leaderboard when scores update
+                        loadAndRenderPoolLeaderboard();
                     });
                 }, 5 * 60 * 1000);
             }
@@ -2792,21 +2795,25 @@
             const infoEl = document.getElementById('tournamentInfoBar');
             if (infoEl) {
                 let infoHtml = '';
-                if (tournamentInfo) {
-                    infoHtml += `<span style="font-weight:600;">${tournamentInfo.name || ''}</span>`;
-                    if (tournamentInfo.status) infoHtml += ` &mdash; <span style="color:#c4a35a;">${tournamentInfo.status}</span>`;
-                }
                 if (lastUpdated) {
                     const updated = new Date(lastUpdated);
-                    infoHtml += ` <span style="color:#64748b; font-size:0.8rem; margin-left:12px;">Last updated: ${updated.toLocaleTimeString()}</span>`;
+                    infoHtml += `<span style="color:#64748b; font-size:0.85rem;">Last updated: ${updated.toLocaleTimeString()}</span>`;
                 }
                 if (liveScoresReady) {
-                    infoHtml += ' <span style="color:#22c55e; font-size:0.75rem; margin-left:8px;">&#9679; LIVE</span>';
+                    infoHtml += ' <span style="color:#22c55e; font-size:0.8rem; margin-left:8px;">&#9679; LIVE from ESPN</span>';
+                } else {
+                    infoHtml += ' <span style="color:#f59e0b; font-size:0.8rem;">&#9679; Showing cached data</span>';
                 }
+                infoHtml += ` <span style="color:#64748b; font-size:0.8rem; margin-left:12px;">${tournamentScores.length} players</span>`;
                 infoEl.innerHTML = infoHtml;
             }
 
-            // Render the leaderboard rows
+            if (tournamentScores.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="12" style="text-align:center; padding:20px; color:#94a3b8;">No tournament data available. Check back when the tournament starts.</td></tr>';
+                return;
+            }
+
+            // Recalculate prizes from current scores
             const prizeMap = livePrizeMap && Object.keys(livePrizeMap).length > 0 ? livePrizeMap : calculateProjectedPrizes(tournamentScores);
 
             const hasHighlight = selectedEntryGolfers.length > 0;
@@ -2815,10 +2822,21 @@
                 const group = getGolferGroup(p.name);
                 const prize = prizeMap[p.name] || 0;
                 const isCut = p.status === 'cut' || p.status === 'wd' || p.status === 'withdrawn' || p.status === 'disqualified';
-                const scoreStr = isCut ? (p.status === 'wd' || p.status === 'withdrawn' ? 'WD' : p.status === 'disqualified' ? 'DQ' : 'CUT') : formatScoreToPar(p.score);
-                const todayStr = p.today !== null && p.today !== undefined ? formatScoreToPar(p.today) : '-';
-                const thruStr = p.thru === 'F' ? 'F' : (p.thru || '-');
 
+                // Score column: show status for cut/wd/dq, otherwise score to par
+                let scoreStr;
+                if (p.status === 'wd' || p.status === 'withdrawn') scoreStr = 'WD';
+                else if (p.status === 'disqualified') scoreStr = 'DQ';
+                else if (p.status === 'cut') scoreStr = 'CUT';
+                else scoreStr = formatScoreToPar(p.score);
+
+                // Today column
+                const todayStr = (p.today !== null && p.today !== undefined && !isCut) ? formatScoreToPar(p.today) : '-';
+
+                // Thru column
+                const thruStr = isCut ? '-' : (p.thru === 'F' || p.thru === '18' ? 'F' : (p.thru || '-'));
+
+                // Group badge
                 const groupColor = group === 'A' ? '#c4a35a' : group === 'B' ? '#16a34a' : group === 'C' ? '#3b82f6' : group === 'D' ? '#a855f7' : '#64748b';
                 const groupLabel = group === 'WC' ? 'WC' : group;
 
@@ -2839,18 +2857,22 @@
 
                 const nameExtra = isWildCard ? ' <span style="font-size:0.65rem; color:#c4a35a; font-weight:700; vertical-align:super;">2x</span>' : (isInEntry ? ' <span style="font-size:0.65rem; color:#c4a35a; vertical-align:super;">&#9733;</span>' : '');
 
+                // Score color: red for under par, green for over par, white for even
+                const scoreColor = p.score !== null && p.score < 0 ? '#ef4444' : p.score === 0 ? '#f8fafc' : '#22c55e';
+                const todayColor = p.today !== null && p.today < 0 ? '#ef4444' : p.today === 0 ? '#f8fafc' : '#22c55e';
+
                 html += `<tr class="${rowClass}" style="${rowStyle}" data-name="${p.name.toLowerCase()}" data-group="${group}" data-status="${p.status}">
                     <td class="font-bold">${p.pos}</td>
                     <td class="font-semibold">${p.name}${nameExtra}</td>
                     <td><span style="background:${groupColor}22; color:${groupColor}; border:1px solid ${groupColor}55; padding:2px 8px; border-radius:4px; font-size:0.75rem; font-weight:600;">${groupLabel}</span></td>
-                    <td class="font-bold" style="color:${p.score !== null && p.score < 0 ? '#ef4444' : p.score === 0 ? '#f8fafc' : '#22c55e'}">${scoreStr}</td>
-                    <td style="color:${p.today !== null && p.today !== undefined && p.today < 0 ? '#ef4444' : p.today === 0 ? '#f8fafc' : '#22c55e'}">${todayStr}</td>
+                    <td class="font-bold" style="color:${scoreColor}">${scoreStr}</td>
+                    <td style="color:${todayColor}">${todayStr}</td>
                     <td>${thruStr}</td>
-                    <td>${p.r1 || '-'}</td>
-                    <td>${p.r2 || '-'}</td>
-                    <td>${p.r3 || '-'}</td>
-                    <td>${p.r4 || '-'}</td>
-                    <td>${p.tot || '-'}</td>
+                    <td>${p.r1 !== null && p.r1 !== undefined ? p.r1 : '-'}</td>
+                    <td>${p.r2 !== null && p.r2 !== undefined ? p.r2 : '-'}</td>
+                    <td>${p.r3 !== null && p.r3 !== undefined ? p.r3 : '-'}</td>
+                    <td>${p.r4 !== null && p.r4 !== undefined ? p.r4 : '-'}</td>
+                    <td>${p.tot !== null && p.tot !== undefined ? p.tot : '-'}</td>
                     <td class="font-bold" style="color: ${prize > 0 ? '#c4a35a' : '#64748b'};">${formatPrizeMoney(prize)}</td>
                 </tr>`;
             });
