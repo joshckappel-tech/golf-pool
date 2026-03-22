@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getSettings } from '@/lib/db'
 
 interface VerifyRequest {
   password: string
+  username?: string
+  type?: 'pool' | 'admin'
 }
 
 export async function POST(request: NextRequest) {
@@ -15,16 +18,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get admin password from environment variable or use default
-    const adminPassword = process.env.ADMIN_PASSWORD || 'golfpool2026'
+    const settings = getSettings()
+    const requestType = body.type || 'admin'
 
-    // Compare passwords
-    const isValid = body.password === adminPassword
-
-    return NextResponse.json(
-      { valid: isValid },
-      { status: 200 }
-    )
+    if (requestType === 'pool') {
+      // Verify pool entry password
+      const poolPassword = process.env.POOL_PASSWORD || settings.poolPassword || 'golf2026'
+      const isValid = body.password === poolPassword
+      return NextResponse.json({ valid: isValid }, { status: 200 })
+    } else {
+      // Verify admin credentials
+      const adminUsername = process.env.ADMIN_USERNAME || settings.adminUsername || 'admin'
+      const adminPassword = process.env.ADMIN_PASSWORD || settings.adminPassword || 'golfpool2026'
+      const isValid = (body.username === adminUsername) && (body.password === adminPassword)
+      return NextResponse.json({ valid: isValid }, { status: 200 })
+    }
   } catch (error) {
     console.error('Admin verify error:', error)
     return NextResponse.json(

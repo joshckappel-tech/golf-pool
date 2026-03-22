@@ -28,6 +28,8 @@ export interface PoolSettings {
   entryFee: number
   tournamentName: string
   teamStakeUrl: string
+  poolPassword: string
+  adminUsername: string
   adminPassword: string
 }
 
@@ -56,6 +58,8 @@ export function initDB() {
       entryFee: 30,
       tournamentName: '2026 Valspar Championship',
       teamStakeUrl: '',
+      poolPassword: 'golf2026',
+      adminUsername: 'admin',
       adminPassword: 'golfpool2026',
     } as PoolSettings,
   }
