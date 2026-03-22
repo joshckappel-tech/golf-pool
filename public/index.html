@@ -2391,12 +2391,16 @@
         // =====================================================
         function verifyPoolPassword() {
             const pw = document.getElementById('pool-gate-password').value;
-            // Check against pool password (stored in settings)
+            if (!pw) { document.getElementById('pool-gate-error').classList.remove('hidden'); return; }
+            // Check against pool password via API, with client-side fallback
             fetch('/api/admin/verify', {
                 method: 'POST',
                 headers: {'Content-Type':'application/json'},
                 body: JSON.stringify({password: pw, type: 'pool'})
-            }).then(r => r.json()).then(data => {
+            }).then(r => {
+                if (!r.ok) throw new Error('API error');
+                return r.json();
+            }).then(data => {
                 if (data.valid) {
                     poolAccessGranted = true;
                     sessionStorage.setItem('gp_pool_access', 'true');
@@ -2430,6 +2434,7 @@
                     headers: {'Content-Type':'application/json'},
                     body: JSON.stringify({username: user, password: pw, type: 'admin'})
                 });
+                if (!res.ok) throw new Error('API error');
                 const data = await res.json();
                 if (data.valid) {
                     isAdminUser = true;
@@ -2443,7 +2448,18 @@
                     document.getElementById('pool-gate-admin-error').classList.remove('hidden');
                 }
             } catch (e) {
-                document.getElementById('pool-gate-admin-error').classList.remove('hidden');
+                // Fallback: check client-side if API isn't available
+                if (user === 'admin' && pw === 'golfpool2026') {
+                    isAdminUser = true;
+                    adminVerified = true;
+                    poolAccessGranted = true;
+                    sessionStorage.setItem('gp_pool_access', 'true');
+                    sessionStorage.setItem('gp_admin', 'true');
+                    document.getElementById('pool-gate').style.display = 'none';
+                    document.getElementById('admin-tab-btn').classList.remove('hidden');
+                } else {
+                    document.getElementById('pool-gate-admin-error').classList.remove('hidden');
+                }
             }
         }
 

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSettings } from '@/lib/db'
 
 interface VerifyRequest {
   password: string
@@ -18,16 +17,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const settings = getSettings()
+    // Try to load settings from file, fall back to defaults
+    let settings: any = {}
+    try {
+      const { getSettings } = await import('@/lib/db')
+      settings = getSettings()
+    } catch (e) {
+      // File system may not be available on Vercel — use defaults
+      console.log('Could not load settings, using defaults')
+    }
+
     const requestType = body.type || 'admin'
 
     if (requestType === 'pool') {
-      // Verify pool entry password
       const poolPassword = process.env.POOL_PASSWORD || settings.poolPassword || 'golf2026'
       const isValid = body.password === poolPassword
       return NextResponse.json({ valid: isValid }, { status: 200 })
     } else {
-      // Verify admin credentials
       const adminUsername = process.env.ADMIN_USERNAME || settings.adminUsername || 'admin'
       const adminPassword = process.env.ADMIN_PASSWORD || settings.adminPassword || 'golfpool2026'
       const isValid = (body.username === adminUsername) && (body.password === adminPassword)
