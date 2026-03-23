@@ -179,6 +179,23 @@ function parseEspnApiResponse(data: any): any {
           }
         }
 
+        // === EARNINGS (available after tournament is complete) ===
+        let earnings: number | null = null;
+        if (c.earnings !== undefined && c.earnings !== null) {
+          earnings = typeof c.earnings === 'number' ? c.earnings : parseFloat(String(c.earnings));
+          if (isNaN(earnings)) earnings = null;
+        }
+        // Also check statistics array for earnings
+        if (earnings === null && Array.isArray(c.statistics)) {
+          for (const stat of c.statistics) {
+            if (stat.name === 'earnings' || stat.abbreviation === 'EARN') {
+              earnings = parseFloat(String(stat.displayValue || stat.value || '0').replace(/[$,]/g, ''));
+              if (isNaN(earnings)) earnings = null;
+              break;
+            }
+          }
+        }
+
         parsed.push({
           name,
           score: scoreToPar,
@@ -192,6 +209,7 @@ function parseEspnApiResponse(data: any): any {
           totalStrokes,
           status: playerStatus,
           country: athlete.flag?.alt || null,
+          earnings,
           _sortScore: scoreToPar !== null ? scoreToPar : 999, // for sorting
         });
       } catch (err) {

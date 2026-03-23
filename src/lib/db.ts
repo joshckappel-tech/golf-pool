@@ -32,6 +32,7 @@ export interface PoolSettings {
   adminUsername: string
   adminPassword: string
   payoutPcts?: number[] // 1st-10th place payout percentages
+  projectedPayouts?: number[] // Projected prize money by position (1st-65th), in dollars
 }
 
 // On Vercel, the deployed file system is read-only. Use /tmp for writable storage.

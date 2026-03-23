@@ -31,6 +31,7 @@ const DEFAULT_SETTINGS: PoolSettings = {
   adminUsername: 'admin',
   adminPassword: 'golfpool2026',
   payoutPcts: [30, 15, 10, 8, 7, 6, 5, 4, 3, 0],
+  projectedPayouts: undefined,
 }
 
 // ============================================

@@ -44,6 +44,10 @@ export async function GET() {
         // Full statistics array
         statistics_full: c.statistics,
 
+        // Earnings (may appear after tournament completion)
+        earnings: c.earnings,
+        prize: c.prize,
+
         // Full linescores array (round data)
         linescores_full: c.linescores,
       };
