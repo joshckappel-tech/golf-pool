@@ -578,13 +578,13 @@
                             </div>
                             <div>
                                 <p class="text-slate-400 text-sm mb-1">Entries</p>
-                                <p class="text-2xl font-bold">0</p>
-                                <p class="text-slate-400 text-sm mt-2 entry-fee-display">$${poolSettings.entryFee} per entry</p>
+                                <p class="text-2xl font-bold" id="home-entry-count">0</p>
+                                <p class="text-slate-400 text-sm mt-2 entry-fee-display" id="home-entry-fee">$30 per entry</p>
                             </div>
                             <div>
                                 <p class="text-slate-400 text-sm mb-1">Prize Pool</p>
-                                <p class="text-2xl font-bold" style="color: #c4a35a;">$0</p>
-                                <p class="text-slate-400 text-sm mt-2">Be the first to enter!</p>
+                                <p class="text-2xl font-bold" style="color: #c4a35a;" id="home-prize-pool">$0</p>
+                                <p class="text-slate-400 text-sm mt-2" id="home-prize-pool-sub">Be the first to enter!</p>
                             </div>
                         </div>
                         <div class="mt-6 pt-6 border-t border-green-900/30">
@@ -754,161 +754,33 @@
                 <h2 class="text-3xl font-bold mb-6">Scenario Generator</h2>
 
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <!-- Left Panel: Golfer Adjustments -->
+                    <!-- Left Panel: Current Tournament Leaderboard with adjustments -->
                     <div class="scenario-panel">
                         <h3 class="text-xl font-bold mb-4">Current Leaderboard</h3>
-                        <p class="text-slate-400 text-sm mb-4">Adjust positions and scores to see impact on pool standings</p>
+                        <p class="text-slate-400 text-sm mb-4">Adjust scores to see impact on pool standings. Changes only apply to this tab.</p>
 
-                        <div class="space-y-3">
-                            <div class="golfer-list-item">
-                                <div class="flex-1">
-                                    <p class="font-bold">1. Sungjae Im</p>
-                                    <p class="text-sm text-slate-400">-8</p>
-                                </div>
-                                <div class="adjustment-buttons">
-                                    <button class="adjustment-button" onclick="adjustScore(-1, 'im')">−</button>
-                                    <button class="adjustment-button" onclick="adjustScore(1, 'im')">+</button>
-                                </div>
-                            </div>
-                            <div class="golfer-list-item">
-                                <div class="flex-1">
-                                    <p class="font-bold">2. Xander Schauffele</p>
-                                    <p class="text-sm text-slate-400">-7</p>
-                                </div>
-                                <div class="adjustment-buttons">
-                                    <button class="adjustment-button" onclick="adjustScore(-1, 'schauffele')">−</button>
-                                    <button class="adjustment-button" onclick="adjustScore(1, 'schauffele')">+</button>
-                                </div>
-                            </div>
-                            <div class="golfer-list-item">
-                                <div class="flex-1">
-                                    <p class="font-bold">3. Jacob Bridgeman</p>
-                                    <p class="text-sm text-slate-400">-6</p>
-                                </div>
-                                <div class="adjustment-buttons">
-                                    <button class="adjustment-button" onclick="adjustScore(-1, 'bridgeman')">−</button>
-                                    <button class="adjustment-button" onclick="adjustScore(1, 'bridgeman')">+</button>
-                                </div>
-                            </div>
-                            <div class="golfer-list-item">
-                                <div class="flex-1">
-                                    <p class="font-bold">4. Matt Fitzpatrick</p>
-                                    <p class="text-sm text-slate-400">-6</p>
-                                </div>
-                                <div class="adjustment-buttons">
-                                    <button class="adjustment-button" onclick="adjustScore(-1, 'fitzpatrick')">−</button>
-                                    <button class="adjustment-button" onclick="adjustScore(1, 'fitzpatrick')">+</button>
-                                </div>
-                            </div>
-                            <div class="golfer-list-item">
-                                <div class="flex-1">
-                                    <p class="font-bold">5. Viktor Hovland</p>
-                                    <p class="text-sm text-slate-400">-5</p>
-                                </div>
-                                <div class="adjustment-buttons">
-                                    <button class="adjustment-button" onclick="adjustScore(-1, 'hovland')">−</button>
-                                    <button class="adjustment-button" onclick="adjustScore(1, 'hovland')">+</button>
-                                </div>
-                            </div>
-                            <div class="golfer-list-item">
-                                <div class="flex-1">
-                                    <p class="font-bold">6. Jordan Spieth</p>
-                                    <p class="text-sm text-slate-400">-5</p>
-                                </div>
-                                <div class="adjustment-buttons">
-                                    <button class="adjustment-button" onclick="adjustScore(-1, 'spieth')">−</button>
-                                    <button class="adjustment-button" onclick="adjustScore(1, 'spieth')">+</button>
-                                </div>
-                            </div>
-                            <div class="golfer-list-item">
-                                <div class="flex-1">
-                                    <p class="font-bold">7. Brooks Koepka</p>
-                                    <p class="text-sm text-slate-400">-4</p>
-                                </div>
-                                <div class="adjustment-buttons">
-                                    <button class="adjustment-button" onclick="adjustScore(-1, 'koepka')">−</button>
-                                    <button class="adjustment-button" onclick="adjustScore(1, 'koepka')">+</button>
-                                </div>
-                            </div>
-                            <div class="golfer-list-item">
-                                <div class="flex-1">
-                                    <p class="font-bold">8. Patrick Cantlay</p>
-                                    <p class="text-sm text-slate-400">-4</p>
-                                </div>
-                                <div class="adjustment-buttons">
-                                    <button class="adjustment-button" onclick="adjustScore(-1, 'cantlay')">−</button>
-                                    <button class="adjustment-button" onclick="adjustScore(1, 'cantlay')">+</button>
-                                </div>
-                            </div>
+                        <div id="scenario-leaderboard" class="space-y-2" style="max-height: 500px; overflow-y: auto;">
+                            <p class="text-slate-500 text-sm">Loading leaderboard...</p>
                         </div>
 
-                        <div class="mt-6 flex gap-2">
-                            <button class="button-primary flex-1" onclick="calculateImpact()">Calculate Impact</button>
+                        <div class="mt-4 flex gap-2">
+                            <button class="button-primary flex-1" onclick="calculateScenarioImpact()">Calculate Impact</button>
                             <button class="button-secondary flex-1" onclick="resetScenario()">Reset</button>
                         </div>
                     </div>
 
-                    <!-- Right Panel: Impact Results -->
+                    <!-- Right Panel: Pool Impact Results -->
                     <div class="scenario-panel">
                         <h3 class="text-xl font-bold mb-4">Pool Impact</h3>
-                        <p class="text-slate-400 text-sm mb-4">See how leaderboard changes affect pool standings</p>
+                        <p class="text-slate-400 text-sm mb-4">Pool standings based on adjusted leaderboard</p>
 
-                        <div class="space-y-3">
-                            <div class="bg-green-900/20 p-3 rounded border border-green-700/30">
-                                <div class="flex justify-between items-start mb-2">
-                                    <div>
-                                        <p class="text-xs text-slate-400 mb-1">1st Place</p>
-                                        <p class="font-bold">Mike Johnson</p>
-                                        <p class="text-sm text-slate-400">+$850</p>
-                                    </div>
-                                    <span class="change-indicator change-up">HELD</span>
-                                </div>
-                            </div>
-                            <div class="bg-slate-700/20 p-3 rounded border border-slate-600/30">
-                                <div class="flex justify-between items-start mb-2">
-                                    <div>
-                                        <p class="text-xs text-slate-400 mb-1">2nd Place</p>
-                                        <p class="font-bold">Sarah Williams</p>
-                                        <p class="text-sm text-slate-400">+$625</p>
-                                    </div>
-                                    <span class="change-indicator change-up">↑ from 4th</span>
-                                </div>
-                            </div>
-                            <div class="bg-slate-700/20 p-3 rounded border border-slate-600/30">
-                                <div class="flex justify-between items-start mb-2">
-                                    <div>
-                                        <p class="text-xs text-slate-400 mb-1">3rd Place</p>
-                                        <p class="font-bold">David Chen</p>
-                                        <p class="text-sm text-slate-400">+$480</p>
-                                    </div>
-                                    <span class="change-indicator change-up">↑ from 5th</span>
-                                </div>
-                            </div>
-                            <div class="bg-slate-700/20 p-3 rounded border border-slate-600/30">
-                                <div class="flex justify-between items-start mb-2">
-                                    <div>
-                                        <p class="text-xs text-slate-400 mb-1">4th Place</p>
-                                        <p class="font-bold">Jessica Martinez</p>
-                                        <p class="text-sm text-slate-400">+$350</p>
-                                    </div>
-                                    <span class="change-indicator change-down">↓ from 2nd</span>
-                                </div>
-                            </div>
-                            <div class="bg-slate-700/20 p-3 rounded border border-slate-600/30">
-                                <div class="flex justify-between items-start mb-2">
-                                    <div>
-                                        <p class="text-xs text-slate-400 mb-1">5th Place</p>
-                                        <p class="font-bold">Robert Taylor</p>
-                                        <p class="text-sm text-slate-400">+$265</p>
-                                    </div>
-                                    <span class="change-indicator change-down">↓ from 3rd</span>
-                                </div>
-                            </div>
+                        <div id="scenario-pool-impact" class="space-y-2" style="max-height: 500px; overflow-y: auto;">
+                            <p class="text-slate-500 text-sm">Adjust scores and click "Calculate Impact" to see pool standings.</p>
                         </div>
 
-                        <div class="mt-6 p-4 bg-yellow-900/20 border border-yellow-700/30 rounded">
-                            <p class="text-sm font-bold" style="color: #fed7aa;">💡 Insight</p>
-                            <p class="text-sm text-slate-300 mt-1">If McIlroy gains 2 more strokes, 3 entries will move positions in the prize money payout.</p>
+                        <div id="scenario-insight" class="hidden mt-4 p-4 bg-yellow-900/20 border border-yellow-700/30 rounded">
+                            <p class="text-sm font-bold" style="color: #fed7aa;">Insight</p>
+                            <p class="text-sm text-slate-300 mt-1" id="scenario-insight-text"></p>
                         </div>
                     </div>
                 </div>
@@ -1085,48 +957,30 @@
                 <!-- Entry Management -->
                 <div id="admin-entries" class="admin-tab-pane hidden">
                     <h3 class="text-xl font-bold mb-4">Entry Management</h3>
+                    <div class="flex items-center gap-4 mb-4">
+                        <button class="button-secondary text-sm" onclick="loadAdminEntries()">Refresh Entries</button>
+                        <span id="admin-entries-count" class="text-sm text-slate-400"></span>
+                    </div>
                     <div class="leaderboard-scroll">
-                        <table class="entry-table">
+                        <table class="leaderboard-table">
                             <thead>
                                 <tr>
+                                    <th style="width:40px;">#</th>
                                     <th>Name</th>
                                     <th>Email</th>
-                                    <th>Picks</th>
-                                    <th>Paid</th>
-                                    <th>Payment (TeamStake)</th>
+                                    <th>Group A</th>
+                                    <th>Group B</th>
+                                    <th>Group C</th>
+                                    <th>Group D</th>
+                                    <th>WC1</th>
+                                    <th>WC2</th>
+                                    <th>TB</th>
+                                    <th>Submitted</th>
+                                    <th>Payment</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                <tr>
-                                    <td>Mike Johnson</td>
-                                    <td>mike@example.com</td>
-                                    <td>Complete</td>
-                                    <td><span class="paid-badge yes">✓ Paid</span></td>
-                                </tr>
-                                <tr>
-                                    <td>Sarah Williams</td>
-                                    <td>sarah@example.com</td>
-                                    <td>Complete</td>
-                                    <td><span class="paid-badge yes">✓ Paid</span></td>
-                                </tr>
-                                <tr>
-                                    <td>David Chen</td>
-                                    <td>david@example.com</td>
-                                    <td>Complete</td>
-                                    <td><span class="paid-badge yes">✓ Paid</span></td>
-                                </tr>
-                                <tr>
-                                    <td>Jessica Martinez</td>
-                                    <td>jessica@example.com</td>
-                                    <td>Pending</td>
-                                    <td><span class="paid-badge no">✗ Unpaid</span></td>
-                                </tr>
-                                <tr>
-                                    <td>Robert Taylor</td>
-                                    <td>robert@example.com</td>
-                                    <td>Complete</td>
-                                    <td><span class="paid-badge yes">✓ Paid</span></td>
-                                </tr>
+                            <tbody id="admin-entries-body">
+                                <tr><td colspan="12" style="text-align:center; padding:20px; color:#94a3b8;">Click "Refresh Entries" to load entries</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -1514,6 +1368,7 @@
         // =====================================================
         document.addEventListener('DOMContentLoaded', () => {
             renderField();
+            updateHomeStats();
             renderAdminGolfers();
             renderAdminPayoutRows();
             renderProjectedPayoutsAdmin();
@@ -1554,9 +1409,10 @@
             });
             if (tabName === 'tournament') renderTournamentLeaderboard();
             if (tabName === 'leaderboard') loadAndRenderPoolLeaderboard();
-            if (tabName === 'home') renderField();
+            if (tabName === 'home') { renderField(); updateHomeStats(); }
             if (tabName === 'admin') renderAdminGolfers();
             if (tabName === 'entry') renderEntryForm();
+            if (tabName === 'scenario') renderScenarioLeaderboard();
         }
 
         // Tab Switching
@@ -1586,12 +1442,16 @@
             }
             if (tabName === 'home') {
                 renderField();
+                updateHomeStats();
             }
             if (tabName === 'admin') {
                 renderAdminGolfers();
             }
             if (tabName === 'entry') {
                 renderEntryForm();
+            }
+            if (tabName === 'scenario') {
+                renderScenarioLeaderboard();
             }
         }
 
@@ -1620,7 +1480,9 @@
             event.target.style.borderColor = '#16a34a';
 
             // Auto-load data for certain tabs
+            if (tabName === 'entries') loadAdminEntries();
             if (tabName === 'accounts') loadAdminUsers();
+            if (tabName === 'stats') loadAdminStats();
         }
 
         // =====================================================
@@ -1953,17 +1815,332 @@
             }
         }
 
-        // Scenario Generator
-        function adjustScore(delta, golfer) {
-            console.log(`Adjusted ${golfer} by ${delta} strokes`);
+        // =====================================================
+        // HOME TAB: Live stats (entries, fee, prize pool)
+        // =====================================================
+        async function updateHomeStats() {
+            try {
+                const res = await fetch('/api/entries');
+                if (!res.ok) return;
+                const entries = await res.json();
+                const count = Array.isArray(entries) ? entries.length : 0;
+                const fee = poolSettings.entryFee || 30;
+                const pool = count * fee;
+
+                const countEl = document.getElementById('home-entry-count');
+                if (countEl) countEl.textContent = count.toString();
+
+                const feeEl = document.getElementById('home-entry-fee');
+                if (feeEl) feeEl.textContent = '$' + fee + ' per entry';
+
+                const poolEl = document.getElementById('home-prize-pool');
+                if (poolEl) poolEl.textContent = '$' + pool.toLocaleString();
+
+                const subEl = document.getElementById('home-prize-pool-sub');
+                if (subEl) {
+                    if (count === 0) subEl.textContent = 'Be the first to enter!';
+                    else subEl.textContent = count + ' entries × $' + fee;
+                }
+            } catch (e) { console.log('Failed to update home stats:', e); }
         }
 
-        function calculateImpact() {
-            alert('Calculating impact of adjustments...');
+        // =====================================================
+        // ADMIN: ENTRY MANAGEMENT (live entries + payment tracking)
+        // =====================================================
+        async function loadAdminEntries() {
+            const tbody = document.getElementById('admin-entries-body');
+            const countEl = document.getElementById('admin-entries-count');
+            if (!tbody) return;
+            tbody.innerHTML = '<tr><td colspan="12" style="text-align:center; padding:20px; color:#94a3b8;">Loading entries...</td></tr>';
+
+            try {
+                const res = await fetch('/api/entries');
+                if (!res.ok) throw new Error('Failed to load entries');
+                const entries = await res.json();
+
+                if (countEl) countEl.textContent = entries.length + ' total entries';
+
+                if (entries.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center; padding:20px; color:#94a3b8;">No entries submitted yet.</td></tr>';
+                    return;
+                }
+
+                let html = '';
+                entries.forEach((entry, i) => {
+                    const name = entry.name || entry.entrantName || 'Unknown';
+                    const email = entry.email || '-';
+                    const gA = entry.groupA || entry.pickGroupA || '-';
+                    const gB = entry.groupB || entry.pickGroupB || '-';
+                    const gC = entry.groupC || entry.pickGroupC || '-';
+                    const gD = entry.groupD || entry.pickGroupD || '-';
+                    const wc1 = entry.wildCard1 || entry.wc1 || '-';
+                    const wc2 = entry.wildCard2 || entry.wc2 || '-';
+                    const tb = entry.tiebreaker !== undefined && entry.tiebreaker !== null ? entry.tiebreaker : '-';
+                    const submitted = entry.submittedAt ? new Date(entry.submittedAt).toLocaleDateString() : '-';
+                    const isPaid = entry.paymentStatus === 'paid';
+                    const entryId = entry.id || i;
+
+                    html += `<tr>
+                        <td>${i + 1}</td>
+                        <td class="font-semibold">${name}</td>
+                        <td class="text-sm">${email}</td>
+                        <td class="text-sm">${gA}</td>
+                        <td class="text-sm">${gB}</td>
+                        <td class="text-sm">${gC}</td>
+                        <td class="text-sm">${gD}</td>
+                        <td class="text-sm">${wc1}</td>
+                        <td class="text-sm">${wc2}</td>
+                        <td class="text-sm">${tb}</td>
+                        <td class="text-sm">${submitted}</td>
+                        <td>
+                            <button onclick="togglePaymentStatus('${entryId}', ${!isPaid})" class="text-xs px-2 py-1 rounded cursor-pointer" style="background:${isPaid ? 'rgba(22,163,74,0.2)' : 'rgba(234,179,8,0.2)'}; color:${isPaid ? '#22c55e' : '#eab308'}; border:1px solid ${isPaid ? 'rgba(22,163,74,0.4)' : 'rgba(234,179,8,0.4)'};">
+                                ${isPaid ? '✓ Paid' : '✗ Unpaid'}
+                            </button>
+                        </td>
+                    </tr>`;
+                });
+                tbody.innerHTML = html;
+            } catch (e) {
+                console.log('Error loading admin entries:', e);
+                tbody.innerHTML = '<tr><td colspan="12" style="text-align:center; padding:20px; color:#ef4444;">Failed to load entries.</td></tr>';
+            }
+        }
+
+        async function togglePaymentStatus(entryId, markAsPaid) {
+            try {
+                const res = await fetch('/api/entries', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: entryId, paymentStatus: markAsPaid ? 'paid' : 'pending' })
+                });
+                if (res.ok) {
+                    loadAdminEntries(); // Refresh the table
+                } else {
+                    alert('Failed to update payment status.');
+                }
+            } catch (e) {
+                alert('Error updating payment status.');
+            }
+        }
+
+        async function loadAdminStats() {
+            try {
+                const res = await fetch('/api/entries');
+                if (!res.ok) return;
+                const entries = await res.json();
+                const count = entries.length;
+                const fee = poolSettings.entryFee || 30;
+                const paid = entries.filter(e => e.paymentStatus === 'paid').length;
+                const unpaid = count - paid;
+                const collected = paid * fee;
+                const pending = unpaid * fee;
+
+                // Update stat cards in admin-stats
+                const statsPane = document.getElementById('admin-stats');
+                if (!statsPane) return;
+                const cards = statsPane.querySelectorAll('.stat-card');
+                if (cards[0]) {
+                    cards[0].querySelector('.text-4xl').textContent = count;
+                }
+                if (cards[1]) {
+                    cards[1].querySelector('.text-4xl').textContent = paid;
+                    cards[1].querySelector('.text-xs').textContent = '$' + collected.toLocaleString() + ' collected';
+                }
+                if (cards[2]) {
+                    cards[2].querySelector('.text-4xl').textContent = unpaid;
+                    cards[2].querySelector('.text-xs').textContent = '$' + pending.toLocaleString() + ' pending';
+                }
+                if (cards[3]) {
+                    cards[3].querySelector('.text-4xl').textContent = '$' + fee + '.00';
+                    cards[3].querySelector('.text-xs').textContent = 'Pool: $' + (count * fee).toLocaleString();
+                }
+            } catch (e) { console.log('Failed to load admin stats:', e); }
+        }
+
+        // =====================================================
+        // SCENARIO GENERATOR — linked to live data
+        // =====================================================
+        let scenarioAdjustments = {}; // { playerName: strokeDelta }
+        let scenarioInitialized = false;
+
+        function renderScenarioLeaderboard() {
+            const container = document.getElementById('scenario-leaderboard');
+            if (!container) return;
+
+            // Only show active players (top 30 for usability)
+            const active = tournamentScores.filter(s => s.status === 'active').slice(0, 30);
+            if (active.length === 0) {
+                container.innerHTML = '<p class="text-slate-500 text-sm">No tournament data available yet.</p>';
+                return;
+            }
+
+            let html = '';
+            active.forEach(p => {
+                const adj = scenarioAdjustments[p.name] || 0;
+                const adjustedScore = (p.score || 0) + adj;
+                const adjLabel = adj !== 0 ? ` (${adj > 0 ? '+' : ''}${adj})` : '';
+                const adjColor = adj < 0 ? '#ef4444' : adj > 0 ? '#22c55e' : '#94a3b8';
+
+                html += `<div class="flex items-center gap-2 p-2 rounded" style="background:rgba(30,58,31,0.4); border:1px solid rgba(22,163,74,0.2);">
+                    <span class="text-xs font-bold text-slate-400" style="width:30px;">${p.pos}</span>
+                    <span class="text-sm font-semibold flex-1">${p.name}</span>
+                    <span class="text-xs" style="color:${adjColor}; width:70px; text-align:right;">${formatScoreToPar(adjustedScore)}${adjLabel}</span>
+                    <button onclick="adjustScenario('${p.name.replace(/'/g, "\\'")}', -1)" class="text-xs px-2 py-1 rounded" style="background:rgba(239,68,68,0.2); color:#ef4444; border:1px solid rgba(239,68,68,0.3);">-1</button>
+                    <button onclick="adjustScenario('${p.name.replace(/'/g, "\\'")}', 1)" class="text-xs px-2 py-1 rounded" style="background:rgba(34,197,94,0.2); color:#22c55e; border:1px solid rgba(34,197,94,0.3);">+1</button>
+                </div>`;
+            });
+            container.innerHTML = html;
+            scenarioInitialized = true;
+        }
+
+        function adjustScenario(playerName, delta) {
+            if (!scenarioAdjustments[playerName]) scenarioAdjustments[playerName] = 0;
+            scenarioAdjustments[playerName] += delta;
+            renderScenarioLeaderboard();
         }
 
         function resetScenario() {
-            console.log('Scenario reset');
+            scenarioAdjustments = {};
+            renderScenarioLeaderboard();
+            const impactEl = document.getElementById('scenario-pool-impact');
+            if (impactEl) impactEl.innerHTML = '<p class="text-slate-500 text-sm">Adjust scores and click "Calculate Impact" to see pool standings.</p>';
+            const insightEl = document.getElementById('scenario-insight');
+            if (insightEl) insightEl.classList.add('hidden');
+        }
+
+        async function calculateScenarioImpact() {
+            const impactEl = document.getElementById('scenario-pool-impact');
+            if (!impactEl) return;
+            impactEl.innerHTML = '<p class="text-slate-500 text-sm">Calculating...</p>';
+
+            // Create adjusted copy of tournament scores
+            const adjustedScores = tournamentScores.map(p => {
+                const adj = scenarioAdjustments[p.name] || 0;
+                if (adj === 0) return {...p};
+                return {
+                    ...p,
+                    score: p.score !== null ? p.score + adj : adj,
+                };
+            });
+
+            // Recalculate positions for adjusted scores
+            const active = adjustedScores.filter(s => s.status === 'active');
+            active.sort((a, b) => (a.score || 999) - (b.score || 999));
+            let posIdx = 0;
+            const groups = {};
+            active.forEach(p => {
+                const key = p.score !== null ? p.score : 999;
+                if (!groups[key]) groups[key] = { players: [], startIdx: posIdx };
+                groups[key].players.push(p);
+                posIdx++;
+            });
+            // Assign positions with tie notation
+            Object.values(groups).forEach(g => {
+                const startPos = g.startIdx + 1;
+                const pos = g.players.length > 1 ? 'T' + startPos : startPos.toString();
+                g.players.forEach(p => { p.pos = pos; });
+            });
+
+            // Calculate scenario prize map from adjusted scores
+            const scenarioPrizeMap = calculateProjectedPrizes(adjustedScores);
+            const originalPrizeMap = livePrizeMap && Object.keys(livePrizeMap).length > 0 ? livePrizeMap : calculateProjectedPrizes(tournamentScores);
+
+            // Fetch entries and build pool standings (same logic as loadAndRenderPoolLeaderboard)
+            let entries = [];
+            try {
+                const res = await fetch('/api/entries');
+                if (res.ok) entries = await res.json();
+            } catch (e) {}
+
+            if (entries.length === 0) {
+                impactEl.innerHTML = '<p class="text-slate-500 text-sm">No entries submitted yet. Pool impact requires entries.</p>';
+                return;
+            }
+
+            // Helper to look up prize from a map with fuzzy matching
+            function lookupPrize(prizeMap, golferName) {
+                if (!golferName) return 0;
+                if (prizeMap[golferName] !== undefined) return prizeMap[golferName];
+                const lower = golferName.toLowerCase();
+                for (const [name, prize] of Object.entries(prizeMap)) {
+                    if (name.toLowerCase() === lower) return prize;
+                }
+                return 0;
+            }
+
+            // Build standings for both original and scenario
+            function buildStandings(prizeMap) {
+                return entries.map(entry => {
+                    const picks = [
+                        entry.groupA || entry.pickGroupA || '',
+                        entry.groupB || entry.pickGroupB || '',
+                        entry.groupC || entry.pickGroupC || '',
+                        entry.groupD || entry.pickGroupD || '',
+                    ];
+                    const wcs = [
+                        entry.wildCard1 || entry.wc1 || '',
+                        entry.wildCard2 || entry.wc2 || '',
+                    ];
+                    let total = 0;
+                    picks.forEach(g => { total += lookupPrize(prizeMap, g); });
+                    wcs.forEach(w => { total += lookupPrize(prizeMap, w) * 2; });
+                    return {
+                        name: entry.name || entry.entrantName || 'Unknown',
+                        total: total,
+                        tb: entry.tiebreaker !== undefined ? entry.tiebreaker : 999,
+                    };
+                }).sort((a, b) => b.total !== a.total ? b.total - a.total : a.tb - b.tb);
+            }
+
+            const originalStandings = buildStandings(originalPrizeMap);
+            const scenarioStandings = buildStandings(scenarioPrizeMap);
+
+            // Assign ranks
+            originalStandings.forEach((s, i) => { s.rank = i + 1; });
+            scenarioStandings.forEach((s, i) => { s.rank = i + 1; });
+
+            // Build rank lookup for original
+            const origRankMap = {};
+            originalStandings.forEach(s => { origRankMap[s.name] = s.rank; });
+
+            // Render
+            let html = '';
+            let movers = 0;
+            scenarioStandings.forEach((s, i) => {
+                const origRank = origRankMap[s.name] || '-';
+                const diff = typeof origRank === 'number' ? origRank - s.rank : 0;
+                let changeHtml = '';
+                if (diff > 0) { changeHtml = `<span style="color:#22c55e; font-size:0.75rem;">&#9650; from ${getOrdinal(origRank)}</span>`; movers++; }
+                else if (diff < 0) { changeHtml = `<span style="color:#ef4444; font-size:0.75rem;">&#9660; from ${getOrdinal(origRank)}</span>`; movers++; }
+                else { changeHtml = `<span style="color:#64748b; font-size:0.75rem;">HELD</span>`; }
+
+                const bgColor = i === 0 ? 'rgba(196,163,90,0.15)' : 'rgba(30,58,31,0.4)';
+                const borderColor = i === 0 ? 'rgba(196,163,90,0.4)' : 'rgba(22,163,74,0.2)';
+
+                html += `<div class="flex items-center gap-3 p-3 rounded" style="background:${bgColor}; border:1px solid ${borderColor};">
+                    <span class="text-sm font-bold" style="color:#c4a35a; width:24px;">${s.rank}</span>
+                    <div class="flex-1">
+                        <p class="text-sm font-semibold">${s.name}</p>
+                        <p class="text-xs text-slate-400">${formatPrizeMoney(s.total)}</p>
+                    </div>
+                    ${changeHtml}
+                </div>`;
+            });
+            impactEl.innerHTML = html;
+
+            // Show insight
+            const insightEl = document.getElementById('scenario-insight');
+            const insightText = document.getElementById('scenario-insight-text');
+            if (insightEl && insightText) {
+                const adjCount = Object.values(scenarioAdjustments).filter(v => v !== 0).length;
+                if (movers > 0) {
+                    insightText.textContent = `With ${adjCount} golfer${adjCount > 1 ? 's' : ''} adjusted, ${movers} pool entr${movers > 1 ? 'ies' : 'y'} changed position in the standings.`;
+                    insightEl.classList.remove('hidden');
+                } else {
+                    insightText.textContent = `The adjustments did not change any pool standings.`;
+                    insightEl.classList.remove('hidden');
+                }
+            }
         }
 
         // =====================================================
@@ -2269,6 +2446,7 @@
                         id="admin-payout-${i}" class="flex-1 bg-green-900/20 border border-green-700/30 rounded px-3 py-1.5 text-sm text-right"
                         style="max-width:80px;" oninput="updatePayoutTotal()">
                     <span class="text-xs text-slate-400">%</span>
+                    <span class="text-xs text-slate-500" id="admin-payout-amt-${i}" style="width:70px; text-align:right;">$0</span>
                 </div>`;
             }
             container.innerHTML = html;
@@ -2289,16 +2467,24 @@
                 totalEl.textContent = total + '%';
                 totalEl.style.color = Math.abs(total - 100) < 0.01 ? '#c4a35a' : '#ef4444';
             }
-            // Update pool display
+            // Update pool display with dollar amounts per position
             const fee = parseInt((document.getElementById('admin-entry-fee') || {}).value.replace(/[^0-9]/g,'')) || 30;
             const entriesEl = document.getElementById('admin-pool-entries');
             const poolTotalEl = document.getElementById('admin-pool-total');
-            // Fetch entry count for display
+            // Fetch entry count for display and compute dollar amounts
             fetch('/api/entries').then(r => r.json()).then(entries => {
                 const count = Array.isArray(entries) ? entries.length : 0;
                 const pool = count * fee;
                 if (entriesEl) entriesEl.textContent = count + ' entries';
                 if (poolTotalEl) poolTotalEl.textContent = 'Pool: $' + pool.toLocaleString();
+                // Update dollar amounts next to each percentage
+                for (let i = 0; i < 10; i++) {
+                    const amtEl = document.getElementById('admin-payout-amt-' + i);
+                    if (amtEl) {
+                        const dollarAmt = Math.round(pool * (pcts[i] / 100));
+                        amtEl.textContent = '$' + dollarAmt.toLocaleString();
+                    }
+                }
             }).catch(() => {});
         }
 
