@@ -825,7 +825,39 @@
                                 <div>
                                     <p class="text-xs text-slate-400 mb-1">2026 PGA Tour Schedule</p>
                                     <select id="tournament-selector" class="w-full bg-green-900/20 border border-green-700/30 rounded px-3 py-2 text-sm" onchange="onTournamentChange()">
-                                        <option value="">Loading tournaments...</option>
+                                        <option value="">— Select a tournament —</option>
+                                        <option value="sentry" data-name="The Sentry" data-dates="Jan 2-5, 2026">The Sentry — Jan 2-5</option>
+                                        <option value="sony" data-name="Sony Open in Hawaii" data-dates="Jan 9-12, 2026">Sony Open in Hawaii — Jan 9-12</option>
+                                        <option value="amex" data-name="The American Express" data-dates="Jan 16-19, 2026">The American Express — Jan 16-19</option>
+                                        <option value="farmers" data-name="Farmers Insurance Open" data-dates="Jan 22-25, 2026">Farmers Insurance Open — Jan 22-25</option>
+                                        <option value="att" data-name="AT&amp;T Pebble Beach Pro-Am" data-dates="Jan 29-Feb 1, 2026">AT&amp;T Pebble Beach Pro-Am — Jan 29-Feb 1</option>
+                                        <option value="wmpo" data-name="WM Phoenix Open" data-dates="Feb 5-8, 2026">WM Phoenix Open — Feb 5-8</option>
+                                        <option value="genesis" data-name="The Genesis Invitational" data-dates="Feb 12-15, 2026">The Genesis Invitational — Feb 12-15</option>
+                                        <option value="mexico" data-name="Mexico Open at VidantaWorld" data-dates="Feb 19-22, 2026">Mexico Open at VidantaWorld — Feb 19-22</option>
+                                        <option value="cognizant" data-name="Cognizant Classic" data-dates="Feb 26-Mar 1, 2026">Cognizant Classic — Feb 26-Mar 1</option>
+                                        <option value="arnold_palmer" data-name="Arnold Palmer Invitational" data-dates="Mar 5-8, 2026">Arnold Palmer Invitational — Mar 5-8</option>
+                                        <option value="players" data-name="THE PLAYERS Championship" data-dates="Mar 12-15, 2026">THE PLAYERS Championship — Mar 12-15</option>
+                                        <option value="valspar" data-name="Valspar Championship" data-dates="Mar 19-22, 2026" selected>Valspar Championship — Mar 19-22</option>
+                                        <option value="texas" data-name="Texas Children's Houston Open" data-dates="Mar 26-29, 2026">Texas Children's Houston Open — Mar 26-29</option>
+                                        <option value="valero" data-name="Valero Texas Open" data-dates="Apr 2-5, 2026">Valero Texas Open — Apr 2-5</option>
+                                        <option value="masters" data-name="Masters Tournament" data-dates="Apr 9-12, 2026">Masters Tournament — Apr 9-12</option>
+                                        <option value="rbc_heritage" data-name="RBC Heritage" data-dates="Apr 16-19, 2026">RBC Heritage — Apr 16-19</option>
+                                        <option value="zurich" data-name="Zurich Classic of New Orleans" data-dates="Apr 23-26, 2026">Zurich Classic of New Orleans — Apr 23-26</option>
+                                        <option value="cj_cup" data-name="THE CJ CUP Byron Nelson" data-dates="Apr 30-May 3, 2026">THE CJ CUP Byron Nelson — Apr 30-May 3</option>
+                                        <option value="wells_fargo" data-name="Wells Fargo Championship" data-dates="May 7-10, 2026">Wells Fargo Championship — May 7-10</option>
+                                        <option value="pga" data-name="PGA Championship" data-dates="May 14-17, 2026">PGA Championship — May 14-17</option>
+                                        <option value="charles_schwab" data-name="Charles Schwab Challenge" data-dates="May 21-24, 2026">Charles Schwab Challenge — May 21-24</option>
+                                        <option value="memorial" data-name="the Memorial Tournament" data-dates="May 28-31, 2026">the Memorial Tournament — May 28-31</option>
+                                        <option value="us_open" data-name="U.S. Open" data-dates="Jun 18-21, 2026">U.S. Open — Jun 18-21</option>
+                                        <option value="travelers" data-name="Travelers Championship" data-dates="Jun 25-28, 2026">Travelers Championship — Jun 25-28</option>
+                                        <option value="rocket" data-name="Rocket Mortgage Classic" data-dates="Jul 2-5, 2026">Rocket Mortgage Classic — Jul 2-5</option>
+                                        <option value="john_deere" data-name="John Deere Classic" data-dates="Jul 9-12, 2026">John Deere Classic — Jul 9-12</option>
+                                        <option value="open" data-name="The Open Championship" data-dates="Jul 16-19, 2026">The Open Championship — Jul 16-19</option>
+                                        <option value="3m" data-name="3M Open" data-dates="Jul 23-26, 2026">3M Open — Jul 23-26</option>
+                                        <option value="wyndham" data-name="Wyndham Championship" data-dates="Jul 30-Aug 2, 2026">Wyndham Championship — Jul 30-Aug 2</option>
+                                        <option value="fedex_st_jude" data-name="FedEx St. Jude Championship" data-dates="Aug 6-9, 2026">FedEx St. Jude Championship — Aug 6-9</option>
+                                        <option value="bmw" data-name="BMW Championship" data-dates="Aug 13-16, 2026">BMW Championship — Aug 13-16</option>
+                                        <option value="tour_championship" data-name="TOUR Championship" data-dates="Aug 20-23, 2026">TOUR Championship — Aug 20-23</option>
                                     </select>
                                 </div>
                                 <div>
@@ -921,11 +953,37 @@
                 <!-- Golfer Groups (dynamically rendered from shared data) -->
                 <div id="admin-golfers" class="admin-tab-pane hidden">
                     <h3 class="text-xl font-bold mb-4">Golfer Groups Configuration</h3>
-                    <p class="text-slate-400 text-sm mb-4">Groups are auto-generated from live odds (or ESPN field data as fallback). Drag golfers between groups to customize.</p>
-                    <div class="flex gap-3 mb-6 flex-wrap">
+                    <p class="text-slate-400 text-sm mb-4">Groups are auto-generated from live odds. Click a golfer's name to edit spelling (must match ESPN). Use the form below to add missing golfers.</p>
+                    <div class="flex gap-3 mb-4 flex-wrap">
                         <button class="button-primary text-sm" onclick="fetchAndGenerateGroups()">Fetch Field & Generate Groups</button>
                         <button class="button-secondary text-sm" onclick="saveGolferGroups()">Save Groups</button>
                         <span id="golfer-groups-status" class="text-xs text-slate-500 self-center"></span>
+                    </div>
+                    <!-- Add Golfer Form -->
+                    <div class="stat-card mb-6" style="background:rgba(21,128,61,0.08); border:1px solid rgba(22,163,74,0.25);">
+                        <h4 class="font-bold text-sm mb-3" style="color:#c4a35a;">Add Golfer</h4>
+                        <div class="flex gap-3 flex-wrap items-end">
+                            <div class="flex-1" style="min-width:180px;">
+                                <label class="text-xs text-slate-400 block mb-1">Name (must match ESPN spelling)</label>
+                                <input type="text" id="add-golfer-name" placeholder="e.g. Tiger Woods" class="w-full bg-green-900/20 border border-green-700/30 rounded px-3 py-2 text-sm">
+                            </div>
+                            <div style="min-width:100px;">
+                                <label class="text-xs text-slate-400 block mb-1">Odds</label>
+                                <input type="text" id="add-golfer-odds" placeholder="+5000" class="w-full bg-green-900/20 border border-green-700/30 rounded px-3 py-2 text-sm">
+                            </div>
+                            <div style="min-width:120px;">
+                                <label class="text-xs text-slate-400 block mb-1">Group</label>
+                                <select id="add-golfer-group" class="w-full bg-green-900/20 border border-green-700/30 rounded px-3 py-2 text-sm">
+                                    <option value="A">Group A</option>
+                                    <option value="B">Group B</option>
+                                    <option value="C">Group C</option>
+                                    <option value="D">Group D</option>
+                                    <option value="WC" selected>Wild Cards</option>
+                                </select>
+                            </div>
+                            <button class="button-primary text-sm" onclick="addGolferManual()">Add</button>
+                        </div>
+                        <p id="add-golfer-msg" class="text-xs mt-2" style="color:#94a3b8;"></p>
                     </div>
                     <div id="admin-golfers-container" class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     </div>
@@ -1240,20 +1298,12 @@
             const opt = sel.options[sel.selectedIndex];
             if (!opt || !opt.value) return;
 
-            const tournamentName = opt.getAttribute('data-name') || opt.text;
-            const espnId = opt.value;
-            const startDate = opt.getAttribute('data-start') || '';
-            const endDate = opt.getAttribute('data-end') || '';
-            const purse = parseFloat(opt.getAttribute('data-purse') || '0');
-            const state = opt.getAttribute('data-state') || 'pre';
+            const tournamentName = opt.getAttribute('data-name') || opt.text.split(' — ')[0] || opt.text;
+            const tournamentDates = opt.getAttribute('data-dates') || '';
 
             // Update admin dates display
-            if (startDate) {
-                const start = new Date(startDate);
-                const end = endDate ? new Date(endDate) : start;
-                const fmt = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                document.getElementById('admin-tournament-dates').textContent = fmt(start) + ' - ' + fmt(end) + ', ' + start.getFullYear();
-            }
+            const datesEl = document.getElementById('admin-tournament-dates');
+            if (datesEl && tournamentDates) datesEl.textContent = tournamentDates;
 
             // Update Home tab pool name
             const heroTitle = document.querySelector('#home .hero-gradient h2');
@@ -1265,140 +1315,94 @@
             const tournNameDisplay = document.getElementById('tournamentNameDisplay');
             if (tournNameDisplay) tournNameDisplay.textContent = tournamentName;
 
-            // Update purse display
-            if (purse > 0) {
-                const purseEl = document.getElementById('purseDisplay');
-                if (purseEl) purseEl.textContent = 'Total Purse: $' + purse.toLocaleString();
-
-                // Auto-update projected payouts based on new purse
-                autoScaleProjectedPayouts(purse);
-            }
-
-            // Handle leaderboard visibility based on tournament state
-            const leaderboardBody = document.getElementById('tournamentLeaderboardBody');
-            const leaderboardScroll = document.querySelector('#tournament .leaderboard-scroll');
-            const infoBar = document.getElementById('tournamentInfoBar');
-
-            if (state === 'pre') {
-                // Tournament hasn't started — hide leaderboard, show message
-                if (leaderboardScroll) leaderboardScroll.style.display = 'none';
-                if (infoBar) {
-                    infoBar.style.display = 'block';
-                    infoBar.innerHTML = '<div class="text-center py-8"><p class="text-lg text-slate-400 mb-2">Tournament has not started yet</p><p class="text-sm text-slate-500">The leaderboard will appear once the tournament begins.</p></div>';
-                }
-            } else {
-                // Tournament in progress or complete — show leaderboard
-                if (leaderboardScroll) leaderboardScroll.style.display = '';
-                if (infoBar) infoBar.innerHTML = '';
-            }
-
-            // Store selected ESPN event ID for scores API
-            poolSettings.espnEventId = espnId;
-
-            // Update the tournament name in settings
+            // Store in poolSettings
             poolSettings.tournamentName = tournamentName;
+            poolSettings.selectedTournamentKey = opt.value;
+
+            console.log('Tournament changed to:', tournamentName, '(key:', opt.value, ')');
         }
 
         // Fetch PGA Tour schedule from ESPN and populate the tournament selector
-        async function loadESPNSchedule() {
+        // Sync tournament selector with saved settings and trigger UI updates
+        function initTournamentSelector() {
             const sel = document.getElementById('tournament-selector');
             if (!sel) return;
 
-            try {
-                const res = await fetch('/api/espn/schedule');
-                const data = await res.json();
+            // Try to match saved tournament name to a dropdown option
+            const savedName = (poolSettings.tournamentName || '').toLowerCase();
+            const savedKey = poolSettings.selectedTournamentKey || '';
 
-                if (data.tournaments && data.tournaments.length > 0) {
-                    sel.innerHTML = '<option value="">— Select a tournament —</option>';
-
-                    for (const t of data.tournaments) {
-                        const opt = document.createElement('option');
-                        opt.value = t.espnId;
-                        opt.setAttribute('data-name', t.name);
-                        opt.setAttribute('data-start', t.startDate);
-                        opt.setAttribute('data-end', t.endDate);
-                        opt.setAttribute('data-purse', String(t.purse || 0));
-                        opt.setAttribute('data-state', t.state);
-
-                        const start = new Date(t.startDate);
-                        const end = new Date(t.endDate);
-                        const fmt = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                        const stateLabel = t.state === 'in' ? ' [LIVE]' : t.state === 'post' ? ' [Complete]' : '';
-                        opt.textContent = t.name + ' — ' + fmt(start) + '-' + fmt(end) + stateLabel;
-
-                        // Auto-select if matches current pool tournament
-                        if (poolSettings.espnEventId && String(poolSettings.espnEventId) === String(t.espnId)) {
-                            opt.selected = true;
-                        } else if (!poolSettings.espnEventId && t.name && poolSettings.tournamentName &&
-                                   t.name.toLowerCase().includes(poolSettings.tournamentName.toLowerCase().replace(' pool', '').replace('welcome to the ', ''))) {
-                            opt.selected = true;
-                        }
-
-                        sel.appendChild(opt);
+            if (savedKey) {
+                // Match by key
+                for (let i = 0; i < sel.options.length; i++) {
+                    if (sel.options[i].value === savedKey) {
+                        sel.selectedIndex = i;
+                        break;
                     }
-
-                    // Trigger change if we auto-selected
-                    if (sel.value) onTournamentChange();
-                } else {
-                    // ESPN didn't return schedule — keep the dropdown with a fallback message
-                    sel.innerHTML = '<option value="">No ESPN schedule data available</option>';
                 }
-            } catch (e) {
-                console.error('Failed to load ESPN schedule:', e);
-                sel.innerHTML = '<option value="">Failed to load schedule</option>';
+            } else if (savedName) {
+                // Match by name
+                for (let i = 0; i < sel.options.length; i++) {
+                    const optName = (sel.options[i].getAttribute('data-name') || '').toLowerCase();
+                    if (optName && savedName.includes(optName)) {
+                        sel.selectedIndex = i;
+                        break;
+                    }
+                }
             }
+
+            // Fire the change handler to sync all tabs
+            if (sel.value) onTournamentChange();
         }
 
-        // Fetch live odds + ESPN field and auto-generate golfer groups
+        // Fetch live odds from The Odds API and auto-generate golfer groups
         async function fetchAndGenerateGroups() {
             const statusEl = document.getElementById('golfer-groups-status');
-            if (statusEl) statusEl.textContent = 'Fetching odds & field data...';
+            if (statusEl) statusEl.textContent = 'Fetching field & odds data...';
 
-            const espnId = poolSettings.espnEventId || '';
             const tournamentName = poolSettings.tournamentName || '';
+            const apiKey = (document.getElementById('admin-odds-api-key') || {}).value || poolSettings.oddsApiKey || '';
+
+            if (!apiKey) {
+                if (statusEl) statusEl.textContent = 'No Odds API key set. Enter your key in the Odds API Key field above and try again.';
+                return;
+            }
 
             let golfers = [];
+            let eventName = '';
             let source = '';
 
-            // Try Odds API first
             try {
-                const oddsRes = await fetch('/api/odds?tournament=' + encodeURIComponent(tournamentName));
-                const oddsData = await oddsRes.json();
+                // Call odds API — it finds the best matching PGA Tour event and returns field + odds
+                const url = '/api/odds?tournament=' + encodeURIComponent(tournamentName) + '&apiKey=' + encodeURIComponent(apiKey);
+                const res = await fetch(url);
+                const data = await res.json();
 
-                if (oddsData.golfers && oddsData.golfers.length > 0) {
-                    golfers = oddsData.golfers.map(g => ({
+                if (data.error && data.source === 'none') {
+                    if (statusEl) statusEl.textContent = 'API key issue: ' + data.error;
+                    return;
+                }
+
+                if (data.golfers && data.golfers.length > 0) {
+                    golfers = data.golfers.map(g => ({
                         name: g.name,
                         odds: g.odds,
                         oddsNumeric: g.oddsNumeric,
                     }));
-                    source = 'odds_api';
+                    eventName = data.event?.name || '';
+                    source = 'The Odds API (' + data.bookmakerCount + ' bookmakers)';
+                } else if (data.events && data.events.length > 0) {
+                    // Got events but no odds for this one — show available events
+                    const eventList = data.events.map(e => e.name).join(', ');
+                    if (statusEl) statusEl.textContent = 'No odds available for "' + tournamentName + '". Available events: ' + eventList;
+                    return;
+                } else {
+                    if (statusEl) statusEl.textContent = 'No PGA Tour events found on Odds API. Check back closer to tournament week.';
+                    return;
                 }
             } catch (e) {
                 console.error('Odds API fetch failed:', e);
-            }
-
-            // Fallback to ESPN field if no odds data
-            if (golfers.length === 0 && espnId) {
-                try {
-                    const fieldRes = await fetch('/api/espn/field?eventId=' + espnId);
-                    const fieldData = await fieldRes.json();
-
-                    if (fieldData.field && fieldData.field.length > 0) {
-                        // No odds available — assign sequential odds based on field order (ESPN typically orders by ranking)
-                        golfers = fieldData.field.map((g, i) => ({
-                            name: g.name,
-                            odds: '+' + (1000 + i * 200),
-                            oddsNumeric: 1000 + i * 200,
-                        }));
-                        source = 'espn_field';
-                    }
-                } catch (e) {
-                    console.error('ESPN field fetch failed:', e);
-                }
-            }
-
-            if (golfers.length === 0) {
-                if (statusEl) statusEl.textContent = 'No field data found. Select a tournament first.';
+                if (statusEl) statusEl.textContent = 'Failed to fetch odds data. Check console for details.';
                 return;
             }
 
@@ -1406,7 +1410,6 @@
             golfers.sort((a, b) => a.oddsNumeric - b.oddsNumeric);
 
             // Auto-split into groups: A (top tier), B, C, D, WC (rest)
-            // Group sizes: A = ~4-6 (top favorites), B = ~6-8, C = ~8-10, D = ~10-12, WC = rest
             const total = golfers.length;
             const groupASize = Math.max(4, Math.round(total * 0.04));
             const groupBSize = Math.max(6, Math.round(total * 0.07));
@@ -1449,7 +1452,8 @@
 
             const groupCounts = { A: 0, B: 0, C: 0, D: 0, WC: 0 };
             allGolfers.forEach(g => groupCounts[g.group]++);
-            if (statusEl) statusEl.textContent = 'Generated ' + allGolfers.length + ' golfers from ' + source + ' (A:' + groupCounts.A + ' B:' + groupCounts.B + ' C:' + groupCounts.C + ' D:' + groupCounts.D + ' WC:' + groupCounts.WC + ')';
+            const eventNote = eventName ? ' for "' + eventName + '"' : '';
+            if (statusEl) statusEl.textContent = 'Generated ' + allGolfers.length + ' golfers' + eventNote + ' from ' + source + ' — A:' + groupCounts.A + ' B:' + groupCounts.B + ' C:' + groupCounts.C + ' D:' + groupCounts.D + ' WC:' + groupCounts.WC;
         }
 
         // Save golfer groups to settings (persists the admin's group assignments)
@@ -1563,7 +1567,6 @@
                     <h4 class="font-bold mb-3 flex items-center gap-2">
                         ${groupLabels[g]}
                         <span class="text-xs text-slate-500">(${golfers.length})</span>
-                        ${!isWC ? '<span class="manual-override-badge">MANUAL OVERRIDE</span>' : ''}
                     </h4>`;
 
                 const listDiv = document.createElement('div');
@@ -1571,23 +1574,29 @@
 
                 golfers.forEach(golfer => {
                     const card = document.createElement('div');
-                    card.className = 'group-card flex items-center justify-between';
+                    card.className = 'group-card flex items-center justify-between gap-2';
                     card.style.cursor = 'default';
 
+                    const safeName = golfer.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
                     const options = allGroupKeys
                         .map(k => `<option value="${k}" ${k === g ? 'selected' : ''}>${groupLabels[k]}</option>`)
                         .join('');
 
                     card.innerHTML = `
-                        <div>
-                            <p class="font-bold text-sm">${golfer.name}</p>
+                        <div class="flex-1 min-w-0">
+                            <p class="font-bold text-sm golfer-name-display" style="cursor:pointer;" title="Click to edit name"
+                               onclick="startEditGolferName(this, '${safeName}')">${golfer.name}</p>
                             <p class="text-xs text-slate-500">${golfer.odds}</p>
                         </div>
-                        <select onchange="moveGolfer('${golfer.name.replace(/'/g, "\\'")}', this.value)"
-                            class="text-xs rounded px-2 py-1 border"
-                            style="background: rgba(15,23,42,0.8); border-color: rgba(22,163,74,0.5); color: #f8fafc;">
-                            ${options}
-                        </select>`;
+                        <div class="flex items-center gap-1 flex-shrink-0">
+                            <select onchange="moveGolfer('${safeName}', this.value)"
+                                class="text-xs rounded px-2 py-1 border"
+                                style="background: rgba(15,23,42,0.8); border-color: rgba(22,163,74,0.5); color: #f8fafc;">
+                                ${options}
+                            </select>
+                            <button onclick="removeGolfer('${safeName}')" title="Remove golfer"
+                                class="text-xs px-1.5 py-1 rounded" style="color:#ef4444; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3);">✕</button>
+                        </div>`;
                     listDiv.appendChild(card);
                 });
 
@@ -1605,6 +1614,99 @@
             golfer.group = toGroup;
 
             // Re-render all views
+            golferGroups = getGolferGroupNames();
+            renderField();
+            renderAdminGolfers();
+        }
+
+        // =====================================================
+        // Add a golfer manually
+        // =====================================================
+        function addGolferManual() {
+            const nameEl = document.getElementById('add-golfer-name');
+            const oddsEl = document.getElementById('add-golfer-odds');
+            const groupEl = document.getElementById('add-golfer-group');
+            const msgEl = document.getElementById('add-golfer-msg');
+            if (!nameEl || !oddsEl || !groupEl) return;
+
+            const name = nameEl.value.trim();
+            const odds = oddsEl.value.trim() || '+99999';
+            const group = groupEl.value;
+
+            if (!name) {
+                if (msgEl) { msgEl.textContent = 'Enter a golfer name.'; msgEl.style.color = '#ef4444'; }
+                return;
+            }
+
+            // Check for duplicate
+            if (allGolfers.some(g => g.name.toLowerCase() === name.toLowerCase())) {
+                if (msgEl) { msgEl.textContent = '"' + name + '" already exists. Edit their name or group instead.'; msgEl.style.color = '#ef4444'; }
+                return;
+            }
+
+            // Add to allGolfers
+            allGolfers.push({ name: name, odds: odds.startsWith('+') || odds.startsWith('-') ? odds : '+' + odds, group: group });
+
+            // Re-render
+            golferGroups = getGolferGroupNames();
+            renderField();
+            renderAdminGolfers();
+
+            // Clear form
+            nameEl.value = '';
+            oddsEl.value = '';
+            if (msgEl) { msgEl.textContent = 'Added "' + name + '" to ' + groupLabels[group] + '.'; msgEl.style.color = '#22c55e'; }
+            setTimeout(() => { if (msgEl) msgEl.textContent = ''; }, 4000);
+        }
+
+        // =====================================================
+        // Inline edit golfer name (click name to edit)
+        // =====================================================
+        function startEditGolferName(el, currentName) {
+            // Don't re-create if already editing
+            if (el.querySelector('input')) return;
+
+            const originalName = currentName;
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = currentName;
+            input.className = 'text-sm font-bold rounded px-2 py-1 w-full';
+            input.style.cssText = 'background:rgba(15,23,42,0.9); border:1px solid rgba(196,163,90,0.6); color:#f8fafc; outline:none;';
+
+            // Replace the text with input
+            el.textContent = '';
+            el.appendChild(input);
+            input.focus();
+            input.select();
+
+            function saveEdit() {
+                const newName = input.value.trim();
+                if (newName && newName !== originalName) {
+                    const golfer = allGolfers.find(g => g.name === originalName);
+                    if (golfer) {
+                        golfer.name = newName;
+                        golferGroups = getGolferGroupNames();
+                        renderField();
+                    }
+                }
+                renderAdminGolfers();
+            }
+
+            input.addEventListener('blur', saveEdit);
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+                if (e.key === 'Escape') { input.value = originalName; input.blur(); }
+            });
+        }
+
+        // =====================================================
+        // Remove a golfer
+        // =====================================================
+        function removeGolfer(name) {
+            const idx = allGolfers.findIndex(g => g.name === name);
+            if (idx === -1) return;
+            allGolfers.splice(idx, 1);
+
             golferGroups = getGolferGroupNames();
             renderField();
             renderAdminGolfers();
@@ -1638,9 +1740,17 @@
                         const tsEl = document.getElementById('admin-leaguesafe-url');
                         if (tsEl) tsEl.value = poolSettings.cheddarUpUrl;
                     }
-                    // Sync ESPN event ID
-                    if (poolSettings.espnEventId) {
-                        // Will be handled by loadESPNSchedule auto-select
+                    // Sync selected tournament key
+                    if (poolSettings.selectedTournamentKey) {
+                        const sel = document.getElementById('tournament-selector');
+                        if (sel) {
+                            for (let i = 0; i < sel.options.length; i++) {
+                                if (sel.options[i].value === poolSettings.selectedTournamentKey) {
+                                    sel.selectedIndex = i;
+                                    break;
+                                }
+                            }
+                        }
                     }
                     // Sync Odds API key
                     if (poolSettings.oddsApiKey) {
@@ -1656,7 +1766,7 @@
                 }
                 // Update home stats AFTER settings are loaded so entry fee is correct
                 updateHomeStats();
-                loadESPNSchedule();
+                initTournamentSelector();
             }).catch(() => {
                 // Even if settings fail, still show home stats with default fee
                 updateHomeStats();
@@ -2980,10 +3090,10 @@
                 cheddarUpUrl: (document.getElementById('admin-leaguesafe-url') || {}).value || '',
                 submissionDeadline: (document.getElementById('admin-deadline') || {}).value ? new Date(document.getElementById('admin-deadline').value).toISOString() : poolSettings.submissionDeadline,
                 entryFee: entryFee,
-                tournamentName: '2026 Valspar Championship',
+                tournamentName: poolSettings.tournamentName || '2026 Valspar Championship',
+                selectedTournamentKey: poolSettings.selectedTournamentKey || '',
                 payoutPcts: payoutPcts,
                 projectedPayouts: projectedPayouts,
-                espnEventId: poolSettings.espnEventId || '',
                 oddsApiKey: (document.getElementById('admin-odds-api-key') || {}).value || '',
             };
             const poolPw = (document.getElementById('admin-pool-pw') || {}).value;
@@ -3604,7 +3714,7 @@
             payoutPcts: [30, 15, 10, 8, 7, 6, 5, 4, 3, 0], // 1st-10th, 0 = no payout
             projectedPayouts: null, // Will be populated from settings or defaults
             editOverrideDeadline: false, // Admin override: allow editing after deadline
-            espnEventId: '',
+            selectedTournamentKey: 'valspar',
             oddsApiKey: '',
             golferGroups: null,
         };

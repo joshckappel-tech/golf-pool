@@ -33,9 +33,9 @@ export interface PoolSettings {
   adminPassword: string
   payoutPcts?: number[] // 1st-10th place payout percentages
   projectedPayouts?: number[] // Projected prize money by position (1st-65th), in dollars
-  espnEventId?: string // ESPN event ID for the selected tournament
+  selectedTournamentKey?: string // Key of the selected tournament from the dropdown
   oddsApiKey?: string // The Odds API key for fetching live odds
-  golferGroups?: any // Saved golfer group assignments {A: [...], B: [...], C: [...], D: [...], WC: [...]}
+  golferGroups?: any // Saved golfer group assignments [{name, odds, group}, ...]
 }
 
 // On Vercel, the deployed file system is read-only. Use /tmp for writable storage.
