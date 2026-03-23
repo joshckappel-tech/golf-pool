@@ -27,12 +27,15 @@ export interface PoolSettings {
   submissionDeadline: string
   entryFee: number
   tournamentName: string
-  teamStakeUrl: string
+  cheddarUpUrl: string
   poolPassword: string
   adminUsername: string
   adminPassword: string
   payoutPcts?: number[] // 1st-10th place payout percentages
   projectedPayouts?: number[] // Projected prize money by position (1st-65th), in dollars
+  espnEventId?: string // ESPN event ID for the selected tournament
+  oddsApiKey?: string // The Odds API key for fetching live odds
+  golferGroups?: any // Saved golfer group assignments {A: [...], B: [...], C: [...], D: [...], WC: [...]}
 }
 
 // On Vercel, the deployed file system is read-only. Use /tmp for writable storage.
@@ -52,7 +55,7 @@ const DEFAULT_FILES: { [key: string]: any } = {
     submissionDeadline: '2026-03-19T07:00:00Z',
     entryFee: 30,
     tournamentName: '2026 Valspar Championship',
-    teamStakeUrl: '',
+    cheddarUpUrl: 'https://golf-pool-test.cheddarup.com',
     poolPassword: 'golf2026',
     adminUsername: 'admin',
     adminPassword: 'golfpool2026',

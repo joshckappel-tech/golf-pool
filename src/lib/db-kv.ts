@@ -26,7 +26,7 @@ const DEFAULT_SETTINGS: PoolSettings = {
   submissionDeadline: '2026-03-19T07:00:00Z',
   entryFee: 30,
   tournamentName: '2026 Valspar Championship',
-  teamStakeUrl: '',
+  cheddarUpUrl: 'https://golf-pool-test.cheddarup.com',
   poolPassword: 'golf2026',
   adminUsername: 'admin',
   adminPassword: 'golfpool2026',

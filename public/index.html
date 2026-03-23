@@ -825,41 +825,7 @@
                                 <div>
                                     <p class="text-xs text-slate-400 mb-1">2026 PGA Tour Schedule</p>
                                     <select id="tournament-selector" class="w-full bg-green-900/20 border border-green-700/30 rounded px-3 py-2 text-sm" onchange="onTournamentChange()">
-                                        <option value="">— Select a tournament —</option>
-                                        <option value="sentry">The Sentry — Jan 2-5</option>
-                                        <option value="sony">Sony Open in Hawaii — Jan 9-12</option>
-                                        <option value="amex">The American Express — Jan 16-19</option>
-                                        <option value="farmers">Farmers Insurance Open — Jan 22-25</option>
-                                        <option value="att">AT&T Pebble Beach Pro-Am — Jan 29-Feb 1</option>
-                                        <option value="wmpo">WM Phoenix Open — Feb 5-8</option>
-                                        <option value="genesis">The Genesis Invitational — Feb 12-15</option>
-                                        <option value="mexico">Mexico Open at VidantaWorld — Feb 19-22</option>
-                                        <option value="cognizant">Cognizant Classic — Feb 26-Mar 1</option>
-                                        <option value="arnold_palmer">Arnold Palmer Invitational — Mar 5-8</option>
-                                        <option value="players">THE PLAYERS Championship — Mar 12-15</option>
-                                        <option value="valspar" selected>Valspar Championship — Mar 19-22</option>
-                                        <option value="texas">Texas Children's Houston Open — Mar 26-29</option>
-                                        <option value="valero">Valero Texas Open — Apr 2-5</option>
-                                        <option value="masters">Masters Tournament — Apr 9-12</option>
-                                        <option value="rbc_heritage">RBC Heritage — Apr 16-19</option>
-                                        <option value="zurich">Zurich Classic of New Orleans — Apr 23-26</option>
-                                        <option value="cj_cup">THE CJ CUP Byron Nelson — Apr 30-May 3</option>
-                                        <option value="wells_fargo">Wells Fargo Championship — May 7-10</option>
-                                        <option value="pga">PGA Championship — May 14-17</option>
-                                        <option value="charles_schwab">Charles Schwab Challenge — May 21-24</option>
-                                        <option value="memorial">the Memorial Tournament — May 28-31</option>
-                                        <option value="cadillac">Cadillac Championship — Jun 4-7</option>
-                                        <option value="us_open">U.S. Open — Jun 18-21</option>
-                                        <option value="travelers">Travelers Championship — Jun 25-28</option>
-                                        <option value="rocket">Rocket Mortgage Classic — Jul 2-5</option>
-                                        <option value="john_deere">John Deere Classic — Jul 9-12</option>
-                                        <option value="genesis_scottish">Genesis Scottish Open — Jul 9-12</option>
-                                        <option value="open">The Open Championship — Jul 16-19</option>
-                                        <option value="3m">3M Open — Jul 23-26</option>
-                                        <option value="wyndham">Wyndham Championship — Jul 30-Aug 2</option>
-                                        <option value="fedex_st_jude">FedEx St. Jude Championship — Aug 6-9</option>
-                                        <option value="bmw">BMW Championship — Aug 13-16</option>
-                                        <option value="tour_championship">TOUR Championship — Aug 20-23</option>
+                                        <option value="">Loading tournaments...</option>
                                     </select>
                                 </div>
                                 <div>
@@ -879,9 +845,9 @@
                                     <p class="font-bold" id="admin-tournament-dates">March 19-22, 2026</p>
                                 </div>
                                 <div>
-                                    <p class="text-xs text-slate-400 mb-1">TeamStake Pool URL</p>
-                                    <input type="text" id="admin-leaguesafe-url" placeholder="https://teamstake.com/..." class="w-full bg-green-900/20 border border-green-700/30 rounded px-3 py-2 text-sm" oninput="saveLeagueSafeUrl()">
-                                    <p class="text-xs text-slate-500 mt-1">Paste your TeamStake pool link here. Participants will be directed here to pay after submitting their picks.</p>
+                                    <p class="text-xs text-slate-400 mb-1">Cheddar Up Collection URL</p>
+                                    <input type="text" id="admin-leaguesafe-url" placeholder="https://your-pool.cheddarup.com" class="w-full bg-green-900/20 border border-green-700/30 rounded px-3 py-2 text-sm" oninput="saveLeagueSafeUrl()" value="https://golf-pool-test.cheddarup.com">
+                                    <p class="text-xs text-slate-500 mt-1">Paste your Cheddar Up collection link here. Participants will be directed here to pay after submitting their picks.</p>
                                 </div>
                                 <div>
                                     <p class="text-xs text-slate-400 mb-1">Submission Deadline</p>
@@ -892,6 +858,11 @@
                                     <p class="text-xs text-slate-400 mb-1">Pool Entry Password</p>
                                     <input type="text" id="admin-pool-pw" placeholder="Password given to all entrants" value="golf2026" class="w-full bg-green-900/20 border border-green-700/30 rounded px-3 py-2 text-sm">
                                     <p class="text-xs text-slate-500 mt-1">Share this password with your pool entrants so they can access the site.</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-slate-400 mb-1">Odds API Key</p>
+                                    <input type="text" id="admin-odds-api-key" placeholder="Paste your the-odds-api.com key" class="w-full bg-green-900/20 border border-green-700/30 rounded px-3 py-2 text-sm">
+                                    <p class="text-xs text-slate-500 mt-1">Free at <a href="https://the-odds-api.com" target="_blank" class="text-green-400 hover:underline">the-odds-api.com</a> (500 req/mo). Used to auto-generate golfer groups.</p>
                                 </div>
                                 <div>
                                     <p class="text-xs text-slate-400 mb-1">Admin Username</p>
@@ -950,7 +921,12 @@
                 <!-- Golfer Groups (dynamically rendered from shared data) -->
                 <div id="admin-golfers" class="admin-tab-pane hidden">
                     <h3 class="text-xl font-bold mb-4">Golfer Groups Configuration</h3>
-                    <p class="text-slate-400 text-sm mb-6">Use the dropdown on each golfer to move them between groups. Changes are reflected on the Home page instantly.</p>
+                    <p class="text-slate-400 text-sm mb-4">Groups are auto-generated from live odds (or ESPN field data as fallback). Drag golfers between groups to customize.</p>
+                    <div class="flex gap-3 mb-6 flex-wrap">
+                        <button class="button-primary text-sm" onclick="fetchAndGenerateGroups()">Fetch Field & Generate Groups</button>
+                        <button class="button-secondary text-sm" onclick="saveGolferGroups()">Save Groups</button>
+                        <span id="golfer-groups-status" class="text-xs text-slate-500 self-center"></span>
+                    </div>
                     <div id="admin-golfers-container" class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     </div>
                 </div>
@@ -1260,12 +1236,275 @@
 
         function onTournamentChange() {
             const sel = document.getElementById('tournament-selector');
-            if (sel) {
-                const opt = sel.options[sel.selectedIndex];
-                if (opt && opt.value) {
-                    const datesPart = opt.text.split('—')[1]?.trim() || '';
-                    document.getElementById('admin-tournament-dates').textContent = datesPart + ', 2026';
+            if (!sel) return;
+            const opt = sel.options[sel.selectedIndex];
+            if (!opt || !opt.value) return;
+
+            const tournamentName = opt.getAttribute('data-name') || opt.text;
+            const espnId = opt.value;
+            const startDate = opt.getAttribute('data-start') || '';
+            const endDate = opt.getAttribute('data-end') || '';
+            const purse = parseFloat(opt.getAttribute('data-purse') || '0');
+            const state = opt.getAttribute('data-state') || 'pre';
+
+            // Update admin dates display
+            if (startDate) {
+                const start = new Date(startDate);
+                const end = endDate ? new Date(endDate) : start;
+                const fmt = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                document.getElementById('admin-tournament-dates').textContent = fmt(start) + ' - ' + fmt(end) + ', ' + start.getFullYear();
+            }
+
+            // Update Home tab pool name
+            const heroTitle = document.querySelector('#home .hero-gradient h2');
+            if (heroTitle) heroTitle.textContent = 'Welcome to the ' + tournamentName + ' Pool';
+            const activeTournamentTitle = document.querySelector('#home .stat-card h4');
+            if (activeTournamentTitle) activeTournamentTitle.textContent = tournamentName;
+
+            // Update Tournament tab header
+            const tournNameDisplay = document.getElementById('tournamentNameDisplay');
+            if (tournNameDisplay) tournNameDisplay.textContent = tournamentName;
+
+            // Update purse display
+            if (purse > 0) {
+                const purseEl = document.getElementById('purseDisplay');
+                if (purseEl) purseEl.textContent = 'Total Purse: $' + purse.toLocaleString();
+
+                // Auto-update projected payouts based on new purse
+                autoScaleProjectedPayouts(purse);
+            }
+
+            // Handle leaderboard visibility based on tournament state
+            const leaderboardBody = document.getElementById('tournamentLeaderboardBody');
+            const leaderboardScroll = document.querySelector('#tournament .leaderboard-scroll');
+            const infoBar = document.getElementById('tournamentInfoBar');
+
+            if (state === 'pre') {
+                // Tournament hasn't started — hide leaderboard, show message
+                if (leaderboardScroll) leaderboardScroll.style.display = 'none';
+                if (infoBar) {
+                    infoBar.style.display = 'block';
+                    infoBar.innerHTML = '<div class="text-center py-8"><p class="text-lg text-slate-400 mb-2">Tournament has not started yet</p><p class="text-sm text-slate-500">The leaderboard will appear once the tournament begins.</p></div>';
                 }
+            } else {
+                // Tournament in progress or complete — show leaderboard
+                if (leaderboardScroll) leaderboardScroll.style.display = '';
+                if (infoBar) infoBar.innerHTML = '';
+            }
+
+            // Store selected ESPN event ID for scores API
+            poolSettings.espnEventId = espnId;
+
+            // Update the tournament name in settings
+            poolSettings.tournamentName = tournamentName;
+        }
+
+        // Fetch PGA Tour schedule from ESPN and populate the tournament selector
+        async function loadESPNSchedule() {
+            const sel = document.getElementById('tournament-selector');
+            if (!sel) return;
+
+            try {
+                const res = await fetch('/api/espn/schedule');
+                const data = await res.json();
+
+                if (data.tournaments && data.tournaments.length > 0) {
+                    sel.innerHTML = '<option value="">— Select a tournament —</option>';
+
+                    for (const t of data.tournaments) {
+                        const opt = document.createElement('option');
+                        opt.value = t.espnId;
+                        opt.setAttribute('data-name', t.name);
+                        opt.setAttribute('data-start', t.startDate);
+                        opt.setAttribute('data-end', t.endDate);
+                        opt.setAttribute('data-purse', String(t.purse || 0));
+                        opt.setAttribute('data-state', t.state);
+
+                        const start = new Date(t.startDate);
+                        const end = new Date(t.endDate);
+                        const fmt = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                        const stateLabel = t.state === 'in' ? ' [LIVE]' : t.state === 'post' ? ' [Complete]' : '';
+                        opt.textContent = t.name + ' — ' + fmt(start) + '-' + fmt(end) + stateLabel;
+
+                        // Auto-select if matches current pool tournament
+                        if (poolSettings.espnEventId && String(poolSettings.espnEventId) === String(t.espnId)) {
+                            opt.selected = true;
+                        } else if (!poolSettings.espnEventId && t.name && poolSettings.tournamentName &&
+                                   t.name.toLowerCase().includes(poolSettings.tournamentName.toLowerCase().replace(' pool', '').replace('welcome to the ', ''))) {
+                            opt.selected = true;
+                        }
+
+                        sel.appendChild(opt);
+                    }
+
+                    // Trigger change if we auto-selected
+                    if (sel.value) onTournamentChange();
+                } else {
+                    // ESPN didn't return schedule — keep the dropdown with a fallback message
+                    sel.innerHTML = '<option value="">No ESPN schedule data available</option>';
+                }
+            } catch (e) {
+                console.error('Failed to load ESPN schedule:', e);
+                sel.innerHTML = '<option value="">Failed to load schedule</option>';
+            }
+        }
+
+        // Fetch live odds + ESPN field and auto-generate golfer groups
+        async function fetchAndGenerateGroups() {
+            const statusEl = document.getElementById('golfer-groups-status');
+            if (statusEl) statusEl.textContent = 'Fetching odds & field data...';
+
+            const espnId = poolSettings.espnEventId || '';
+            const tournamentName = poolSettings.tournamentName || '';
+
+            let golfers = [];
+            let source = '';
+
+            // Try Odds API first
+            try {
+                const oddsRes = await fetch('/api/odds?tournament=' + encodeURIComponent(tournamentName));
+                const oddsData = await oddsRes.json();
+
+                if (oddsData.golfers && oddsData.golfers.length > 0) {
+                    golfers = oddsData.golfers.map(g => ({
+                        name: g.name,
+                        odds: g.odds,
+                        oddsNumeric: g.oddsNumeric,
+                    }));
+                    source = 'odds_api';
+                }
+            } catch (e) {
+                console.error('Odds API fetch failed:', e);
+            }
+
+            // Fallback to ESPN field if no odds data
+            if (golfers.length === 0 && espnId) {
+                try {
+                    const fieldRes = await fetch('/api/espn/field?eventId=' + espnId);
+                    const fieldData = await fieldRes.json();
+
+                    if (fieldData.field && fieldData.field.length > 0) {
+                        // No odds available — assign sequential odds based on field order (ESPN typically orders by ranking)
+                        golfers = fieldData.field.map((g, i) => ({
+                            name: g.name,
+                            odds: '+' + (1000 + i * 200),
+                            oddsNumeric: 1000 + i * 200,
+                        }));
+                        source = 'espn_field';
+                    }
+                } catch (e) {
+                    console.error('ESPN field fetch failed:', e);
+                }
+            }
+
+            if (golfers.length === 0) {
+                if (statusEl) statusEl.textContent = 'No field data found. Select a tournament first.';
+                return;
+            }
+
+            // Sort by odds (best/lowest first)
+            golfers.sort((a, b) => a.oddsNumeric - b.oddsNumeric);
+
+            // Auto-split into groups: A (top tier), B, C, D, WC (rest)
+            // Group sizes: A = ~4-6 (top favorites), B = ~6-8, C = ~8-10, D = ~10-12, WC = rest
+            const total = golfers.length;
+            const groupASize = Math.max(4, Math.round(total * 0.04));
+            const groupBSize = Math.max(6, Math.round(total * 0.07));
+            const groupCSize = Math.max(8, Math.round(total * 0.08));
+            const groupDSize = Math.max(10, Math.round(total * 0.10));
+
+            let idx = 0;
+            const newAllGolfers = [];
+
+            // Group A
+            for (let i = 0; i < groupASize && idx < total; i++, idx++) {
+                newAllGolfers.push({ name: golfers[idx].name, odds: golfers[idx].odds, group: 'A' });
+            }
+            // Group B
+            for (let i = 0; i < groupBSize && idx < total; i++, idx++) {
+                newAllGolfers.push({ name: golfers[idx].name, odds: golfers[idx].odds, group: 'B' });
+            }
+            // Group C
+            for (let i = 0; i < groupCSize && idx < total; i++, idx++) {
+                newAllGolfers.push({ name: golfers[idx].name, odds: golfers[idx].odds, group: 'C' });
+            }
+            // Group D
+            for (let i = 0; i < groupDSize && idx < total; i++, idx++) {
+                newAllGolfers.push({ name: golfers[idx].name, odds: golfers[idx].odds, group: 'D' });
+            }
+            // Wild Cards = rest
+            while (idx < total) {
+                newAllGolfers.push({ name: golfers[idx].name, odds: golfers[idx].odds, group: 'WC' });
+                idx++;
+            }
+
+            // Replace the allGolfers array
+            allGolfers.length = 0;
+            newAllGolfers.forEach(g => allGolfers.push(g));
+
+            // Re-render everything
+            golferGroups = getGolferGroupNames();
+            renderField();
+            renderAdminGolfers();
+
+            const groupCounts = { A: 0, B: 0, C: 0, D: 0, WC: 0 };
+            allGolfers.forEach(g => groupCounts[g.group]++);
+            if (statusEl) statusEl.textContent = 'Generated ' + allGolfers.length + ' golfers from ' + source + ' (A:' + groupCounts.A + ' B:' + groupCounts.B + ' C:' + groupCounts.C + ' D:' + groupCounts.D + ' WC:' + groupCounts.WC + ')';
+        }
+
+        // Save golfer groups to settings (persists the admin's group assignments)
+        async function saveGolferGroups() {
+            const statusEl = document.getElementById('golfer-groups-status');
+            if (statusEl) statusEl.textContent = 'Saving groups...';
+
+            try {
+                const groups = allGolfers.map(g => ({ name: g.name, odds: g.odds, group: g.group }));
+                const res = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ golferGroups: groups }),
+                });
+
+                if (res.ok) {
+                    if (statusEl) statusEl.textContent = 'Groups saved successfully!';
+                    setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
+                } else {
+                    if (statusEl) statusEl.textContent = 'Failed to save groups.';
+                }
+            } catch (e) {
+                console.error('Save golfer groups failed:', e);
+                if (statusEl) statusEl.textContent = 'Error saving groups.';
+            }
+        }
+
+        // Auto-scale projected payouts when tournament purse changes
+        function autoScaleProjectedPayouts(newPurse) {
+            if (!newPurse || newPurse <= 0) return;
+
+            // PGA Tour standard distribution percentages (approximate)
+            const defaultDistPcts = [
+                18.0, 10.9, 6.9, 4.9, 4.1, 3.6, 3.35, 3.1, 2.9, 2.7,
+                2.5, 2.3, 2.1, 1.9, 1.8, 1.7, 1.6, 1.5, 1.4, 1.3,
+                1.2, 1.12, 1.04, 0.96, 0.88, 0.8, 0.77, 0.74, 0.71, 0.68,
+                0.65, 0.65, 0.62, 0.59, 0.59, 0.56, 0.53, 0.5, 0.47, 0.44,
+                0.44, 0.41, 0.41, 0.38, 0.38, 0.35, 0.35, 0.33, 0.33, 0.31,
+                0.31, 0.3, 0.3, 0.29, 0.29, 0.28, 0.28, 0.275, 0.27, 0.265,
+                0.26, 0.255, 0.25, 0.245, 0.24
+            ];
+
+            const newPayouts = defaultDistPcts.map(pct => Math.round(newPurse * pct / 100));
+
+            // Update the projected payouts admin fields
+            for (let i = 0; i < 65; i++) {
+                const el = document.getElementById('proj-payout-' + i);
+                if (el) el.value = newPayouts[i];
+            }
+
+            // Update the total display
+            const totalEl = document.getElementById('projectedPayoutsTotal');
+            if (totalEl) {
+                const total = newPayouts.reduce((a, b) => a + b, 0);
+                totalEl.textContent = 'Total: $' + total.toLocaleString();
             }
         }
 
@@ -1393,15 +1632,31 @@
                     onEntryFeeChange();
                     renderAdminPayoutRows();
                     renderProjectedPayoutsAdmin();
-                    // Sync TeamStake URL
-                    if (poolSettings.teamStakeUrl) {
-                        leagueSafeUrl = poolSettings.teamStakeUrl;
+                    // Sync Cheddar Up URL
+                    if (poolSettings.cheddarUpUrl) {
+                        leagueSafeUrl = poolSettings.cheddarUpUrl;
                         const tsEl = document.getElementById('admin-leaguesafe-url');
-                        if (tsEl) tsEl.value = poolSettings.teamStakeUrl;
+                        if (tsEl) tsEl.value = poolSettings.cheddarUpUrl;
+                    }
+                    // Sync ESPN event ID
+                    if (poolSettings.espnEventId) {
+                        // Will be handled by loadESPNSchedule auto-select
+                    }
+                    // Sync Odds API key
+                    if (poolSettings.oddsApiKey) {
+                        const oddsKeyEl = document.getElementById('admin-odds-api-key');
+                        if (oddsKeyEl) oddsKeyEl.value = poolSettings.oddsApiKey;
+                    }
+                    // Sync saved golfer groups
+                    if (poolSettings.golferGroups && Array.isArray(poolSettings.golferGroups) && poolSettings.golferGroups.length > 0) {
+                        allGolfers.length = 0;
+                        poolSettings.golferGroups.forEach(g => allGolfers.push(g));
+                        golferGroups = getGolferGroupNames();
                     }
                 }
                 // Update home stats AFTER settings are loaded so entry fee is correct
                 updateHomeStats();
+                loadESPNSchedule();
             }).catch(() => {
                 // Even if settings fail, still show home stats with default fee
                 updateHomeStats();
@@ -2403,7 +2658,7 @@
                 el.innerHTML = `
                     <div class="mb-6">
                         <h3 class="text-2xl font-bold mb-2">Review & Submit</h3>
-                        <p class="text-slate-400">Review your selections, submit your picks, then complete payment via TeamStake</p>
+                        <p class="text-slate-400">Review your selections, submit your picks, then complete payment via Cheddar Up</p>
                     </div>
                     <div class="stat-card max-w-lg">
                         <div class="space-y-4">
@@ -2536,8 +2791,8 @@
             }
         }
 
-        // TeamStake URL persistence (in-memory for preview)
-        let leagueSafeUrl = '';
+        // Cheddar Up URL persistence (in-memory for preview)
+        let leagueSafeUrl = 'https://golf-pool-test.cheddarup.com';
         function saveLeagueSafeUrl() {
             const el = document.getElementById('admin-leaguesafe-url');
             if (el) leagueSafeUrl = el.value.trim();
@@ -2722,12 +2977,14 @@
 
             const projectedPayouts = getAdminProjectedPayouts();
             const settings = {
-                teamStakeUrl: (document.getElementById('admin-leaguesafe-url') || {}).value || '',
+                cheddarUpUrl: (document.getElementById('admin-leaguesafe-url') || {}).value || '',
                 submissionDeadline: (document.getElementById('admin-deadline') || {}).value ? new Date(document.getElementById('admin-deadline').value).toISOString() : poolSettings.submissionDeadline,
                 entryFee: entryFee,
                 tournamentName: '2026 Valspar Championship',
                 payoutPcts: payoutPcts,
                 projectedPayouts: projectedPayouts,
+                espnEventId: poolSettings.espnEventId || '',
+                oddsApiKey: (document.getElementById('admin-odds-api-key') || {}).value || '',
             };
             const poolPw = (document.getElementById('admin-pool-pw') || {}).value;
             if (poolPw && poolPw.length >= 4) settings.poolPassword = poolPw;
@@ -2751,9 +3008,9 @@
             } catch (e) { alert('Failed to save settings.'); }
         }
 
-        // Submit entry: save picks, then prompt payment via TeamStake
+        // Submit entry: save picks, then prompt payment via Cheddar Up
         function submitEntry() {
-            const lsUrl = poolSettings.teamStakeUrl || (document.getElementById('admin-leaguesafe-url') || {}).value || leagueSafeUrl || '';
+            const lsUrl = poolSettings.cheddarUpUrl || (document.getElementById('admin-leaguesafe-url') || {}).value || leagueSafeUrl || '';
             const hasLsUrl = lsUrl.trim().length > 0;
 
             // Save the entry (in production this would POST to an API)
@@ -2780,7 +3037,7 @@
               body: JSON.stringify(entry)
             }).catch(e => console.log('Entry save failed:', e));
 
-            // Show confirmation with TeamStake payment link
+            // Show confirmation with Cheddar Up payment link
             const el = document.getElementById('entry-main-content');
             const tb = entryPicks.tiebreaker !== null ? formatScore(entryPicks.tiebreaker) : '—';
             el.innerHTML = `
@@ -2798,10 +3055,10 @@
                     </div>
                     <div class="p-4 rounded mb-4" style="background:rgba(196,163,90,0.1); border:1px solid rgba(196,163,90,0.3);">
                         <h4 class="font-bold mb-2" style="color:#c4a35a;">Step 2: Complete Payment</h4>
-                        <p class="text-sm text-slate-300 mb-4">Pay your $${poolSettings.entryFee}.00 entry fee securely through TeamStake. Your entry will be confirmed once payment is received.</p>
+                        <p class="text-sm text-slate-300 mb-4">Pay your $${poolSettings.entryFee}.00 entry fee securely through Cheddar Up. Your entry will be confirmed once payment is received.</p>
                         ${hasLsUrl
-                            ? '<a href="' + lsUrl.trim() + '" target="_blank" rel="noopener noreferrer" class="button-primary block text-center w-full" style="font-size:1.1rem;padding:14px;text-decoration:none;display:block;">Pay $${poolSettings.entryFee}.00 via TeamStake &#8599;</a>'
-                            : '<div class="p-3 rounded text-center" style="background:rgba(100,116,139,0.2); border:1px solid rgba(100,116,139,0.3);"><p class="text-sm text-slate-400">TeamStake payment link not yet configured. Contact the pool commissioner to make your payment.</p></div>'
+                            ? '<a href="' + lsUrl.trim() + '" target="_blank" rel="noopener noreferrer" class="button-primary block text-center w-full" style="font-size:1.1rem;padding:14px;text-decoration:none;display:block;">Pay $${poolSettings.entryFee}.00 via Cheddar Up &#8599;</a>'
+                            : '<div class="p-3 rounded text-center" style="background:rgba(100,116,139,0.2); border:1px solid rgba(100,116,139,0.3);"><p class="text-sm text-slate-400">Cheddar Up payment link not yet configured. Contact the pool commissioner to make your payment.</p></div>'
                         }
                     </div>
                     <div class="text-center mt-4">
@@ -3343,10 +3600,13 @@
             submissionDeadline: '2026-03-19T07:00:00Z',
             entryFee: 30,
             poolPassword: 'golf2026',
-            teamStakeUrl: '',
+            cheddarUpUrl: 'https://golf-pool-test.cheddarup.com',
             payoutPcts: [30, 15, 10, 8, 7, 6, 5, 4, 3, 0], // 1st-10th, 0 = no payout
             projectedPayouts: null, // Will be populated from settings or defaults
             editOverrideDeadline: false, // Admin override: allow editing after deadline
+            espnEventId: '',
+            oddsApiKey: '',
+            golferGroups: null,
         };
 
         // Load saved session on page load
@@ -4053,7 +4313,7 @@
             // Show confirmation
             const el = document.getElementById('entry-main-content');
             const tb = entryPicks.tiebreaker !== null ? formatScore(entryPicks.tiebreaker) : '—';
-            const lsUrl = poolSettings.teamStakeUrl || (document.getElementById('admin-leaguesafe-url') || {}).value || leagueSafeUrl || '';
+            const lsUrl = poolSettings.cheddarUpUrl || (document.getElementById('admin-leaguesafe-url') || {}).value || leagueSafeUrl || '';
             const hasLsUrl = lsUrl.trim().length > 0;
             const fee = poolSettings.entryFee || 30;
 
@@ -4070,7 +4330,7 @@
                         <p class="text-sm text-slate-300"><strong>Wild Cards (2x):</strong> ${entryPicks.WC1}, ${entryPicks.WC2}</p>
                         <p class="text-sm text-slate-300"><strong>Tiebreaker:</strong> ${tb}</p>
                     </div>
-                    ${!isEdit ? '<div class="p-4 rounded mb-4" style="background:rgba(196,163,90,0.1); border:1px solid rgba(196,163,90,0.3);"><h4 class="font-bold mb-2" style="color:#c4a35a;">Step 2: Complete Payment</h4><p class="text-sm text-slate-300 mb-4">Pay your $' + fee + '.00 entry fee securely through TeamStake. Your entry will be confirmed once payment is received.</p>' + (hasLsUrl ? '<a href="' + lsUrl.trim() + '" target="_blank" rel="noopener noreferrer" class="button-primary block text-center w-full" style="font-size:1.1rem;padding:14px;text-decoration:none;display:block;">Pay $' + fee + '.00 via TeamStake &#8599;</a>' : '<div class="p-3 rounded text-center" style="background:rgba(100,116,139,0.2); border:1px solid rgba(100,116,139,0.3);"><p class="text-sm text-slate-400">TeamStake payment link not yet configured. Contact the pool commissioner to make your payment.</p></div>') + '</div>' : ''}
+                    ${!isEdit ? '<div class="p-4 rounded mb-4" style="background:rgba(196,163,90,0.1); border:1px solid rgba(196,163,90,0.3);"><h4 class="font-bold mb-2" style="color:#c4a35a;">Step 2: Complete Payment</h4><p class="text-sm text-slate-300 mb-4">Pay your $' + fee + '.00 entry fee securely through Cheddar Up. Your entry will be confirmed once payment is received.</p>' + (hasLsUrl ? '<a href="' + lsUrl.trim() + '" target="_blank" rel="noopener noreferrer" class="button-primary block text-center w-full" style="font-size:1.1rem;padding:14px;text-decoration:none;display:block;">Pay $' + fee + '.00 via Cheddar Up &#8599;</a>' : '<div class="p-3 rounded text-center" style="background:rgba(100,116,139,0.2); border:1px solid rgba(100,116,139,0.3);"><p class="text-sm text-slate-400">Cheddar Up payment link not yet configured. Contact the pool commissioner to make your payment.</p></div>') + '</div>' : ''}
                     <div class="text-center mt-4">
                         ${currentUser ? '<button class="button-secondary mr-2" onclick="goToTab(\'myentries\')">View My Entries</button>' : ''}
                         <button class="button-secondary" onclick="resetEntry()">Submit Another Entry</button>
