@@ -957,9 +957,15 @@
                 <!-- Entry Management -->
                 <div id="admin-entries" class="admin-tab-pane hidden">
                     <h3 class="text-xl font-bold mb-4">Entry Management</h3>
-                    <div class="flex items-center gap-4 mb-4">
+                    <div class="flex flex-wrap items-center gap-3 mb-4">
                         <button class="button-secondary text-sm" onclick="loadAdminEntries()">Refresh Entries</button>
-                        <span id="admin-entries-count" class="text-sm text-slate-400"></span>
+                        <button class="text-sm px-3 py-1.5 rounded" style="background:rgba(22,163,74,0.2); color:#22c55e; border:1px solid rgba(22,163,74,0.4);" onclick="bulkToggleEditable(true)">Enable All Editing</button>
+                        <button class="text-sm px-3 py-1.5 rounded" style="background:rgba(239,68,68,0.2); color:#ef4444; border:1px solid rgba(239,68,68,0.4);" onclick="bulkToggleEditable(false)">Disable All Editing</button>
+                        <label class="flex items-center gap-2 text-sm text-slate-400 ml-2" title="When checked, editing stays available even after the submission deadline">
+                            <input type="checkbox" id="admin-edit-override" onchange="saveEditOverride()" style="accent-color:#16a34a;">
+                            Allow editing after deadline
+                        </label>
+                        <span id="admin-entries-count" class="text-sm text-slate-400 ml-auto"></span>
                     </div>
                     <div class="leaderboard-scroll">
                         <table class="leaderboard-table">
@@ -977,10 +983,11 @@
                                     <th>TB</th>
                                     <th>Submitted</th>
                                     <th>Payment</th>
+                                    <th>Editable</th>
                                 </tr>
                             </thead>
                             <tbody id="admin-entries-body">
-                                <tr><td colspan="12" style="text-align:center; padding:20px; color:#94a3b8;">Click "Refresh Entries" to load entries</td></tr>
+                                <tr><td colspan="13" style="text-align:center; padding:20px; color:#94a3b8;">Click "Refresh Entries" to load entries</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -1851,7 +1858,11 @@
             const tbody = document.getElementById('admin-entries-body');
             const countEl = document.getElementById('admin-entries-count');
             if (!tbody) return;
-            tbody.innerHTML = '<tr><td colspan="12" style="text-align:center; padding:20px; color:#94a3b8;">Loading entries...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="13" style="text-align:center; padding:20px; color:#94a3b8;">Loading entries...</td></tr>';
+
+            // Sync the override checkbox
+            const overrideEl = document.getElementById('admin-edit-override');
+            if (overrideEl) overrideEl.checked = !!poolSettings.editOverrideDeadline;
 
             try {
                 const res = await fetch('/api/entries');
@@ -1861,7 +1872,7 @@
                 if (countEl) countEl.textContent = entries.length + ' total entries';
 
                 if (entries.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center; padding:20px; color:#94a3b8;">No entries submitted yet.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center; padding:20px; color:#94a3b8;">No entries submitted yet.</td></tr>';
                     return;
                 }
 
@@ -1878,6 +1889,7 @@
                     const tb = entry.tiebreaker !== undefined && entry.tiebreaker !== null ? entry.tiebreaker : '-';
                     const submitted = entry.submittedAt ? new Date(entry.submittedAt).toLocaleDateString() : '-';
                     const isPaid = entry.paymentStatus === 'paid';
+                    const isEditable = entry.editable === true;
                     const entryId = entry.id || i;
 
                     html += `<tr>
@@ -1897,12 +1909,17 @@
                                 ${isPaid ? '✓ Paid' : '✗ Unpaid'}
                             </button>
                         </td>
+                        <td>
+                            <button onclick="toggleEntryEditable('${entryId}', ${!isEditable})" class="text-xs px-2 py-1 rounded cursor-pointer" style="background:${isEditable ? 'rgba(22,163,74,0.2)' : 'rgba(100,116,139,0.2)'}; color:${isEditable ? '#22c55e' : '#94a3b8'}; border:1px solid ${isEditable ? 'rgba(22,163,74,0.4)' : 'rgba(100,116,139,0.4)'};">
+                                ${isEditable ? '✓ On' : '✗ Off'}
+                            </button>
+                        </td>
                     </tr>`;
                 });
                 tbody.innerHTML = html;
             } catch (e) {
                 console.log('Error loading admin entries:', e);
-                tbody.innerHTML = '<tr><td colspan="12" style="text-align:center; padding:20px; color:#ef4444;">Failed to load entries.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="13" style="text-align:center; padding:20px; color:#ef4444;">Failed to load entries.</td></tr>';
             }
         }
 
@@ -1914,13 +1931,63 @@
                     body: JSON.stringify({ id: entryId, paymentStatus: markAsPaid ? 'paid' : 'pending' })
                 });
                 if (res.ok) {
-                    loadAdminEntries(); // Refresh the table
+                    loadAdminEntries();
                 } else {
                     alert('Failed to update payment status.');
                 }
             } catch (e) {
                 alert('Error updating payment status.');
             }
+        }
+
+        async function toggleEntryEditable(entryId, makeEditable) {
+            try {
+                const res = await fetch('/api/entries', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: entryId, editable: makeEditable })
+                });
+                if (res.ok) {
+                    loadAdminEntries();
+                } else {
+                    alert('Failed to update editable status.');
+                }
+            } catch (e) {
+                alert('Error updating editable status.');
+            }
+        }
+
+        async function bulkToggleEditable(enable) {
+            try {
+                const res = await fetch('/api/entries');
+                if (!res.ok) return;
+                const entries = await res.json();
+                // Update each entry's editable flag
+                for (const entry of entries) {
+                    if (entry.id) {
+                        await fetch('/api/entries', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ id: entry.id, editable: enable })
+                        });
+                    }
+                }
+                loadAdminEntries();
+            } catch (e) {
+                alert('Error bulk-toggling editable status.');
+            }
+        }
+
+        async function saveEditOverride() {
+            const el = document.getElementById('admin-edit-override');
+            poolSettings.editOverrideDeadline = el ? el.checked : false;
+            try {
+                await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...poolSettings })
+                });
+            } catch (e) { console.log('Failed to save edit override:', e); }
         }
 
         async function loadAdminStats() {
@@ -3227,6 +3294,7 @@
             teamStakeUrl: '',
             payoutPcts: [30, 15, 10, 8, 7, 6, 5, 4, 3, 0], // 1st-10th, 0 = no payout
             projectedPayouts: null, // Will be populated from settings or defaults
+            editOverrideDeadline: false, // Admin override: allow editing after deadline
         };
 
         // Load saved session on page load
@@ -3574,6 +3642,19 @@
             return new Date() < new Date(poolSettings.submissionDeadline);
         }
 
+        // Check if a specific entry can be edited by the participant
+        function canEditEntry(entry) {
+            // If admin explicitly set editable=true on this entry, allow it
+            if (entry.editable === true) {
+                // Still respect the deadline UNLESS admin checked the override
+                if (isBeforeDeadline()) return true;
+                if (poolSettings.editOverrideDeadline) return true;
+                return false;
+            }
+            // If editable is not explicitly set, fall back to deadline only
+            return isBeforeDeadline();
+        }
+
         function renderMyEntries() {
             const container = document.getElementById('myentries-container');
             if (!container) return;
@@ -3585,7 +3666,7 @@
                 if (subtitle) subtitle.textContent = 'Submissions are open. You can edit your entries until the tournament starts.';
                 if (newBtn) newBtn.classList.remove('hidden');
             } else {
-                if (subtitle) subtitle.textContent = 'Submissions are closed. Your entries are locked.';
+                if (subtitle) subtitle.textContent = 'Submissions are closed. Your entries are locked unless editing has been enabled by the commissioner.';
                 if (newBtn) newBtn.classList.add('hidden');
             }
 
@@ -3601,6 +3682,7 @@
             let html = '';
             userEntries.forEach((entry, idx) => {
                 const tb = entry.tiebreaker !== null && entry.tiebreaker !== undefined ? formatScore(entry.tiebreaker) : '—';
+                const editable = canEditEntry(entry);
                 html += `
                 <div class="stat-card mb-4">
                     <div class="flex justify-between items-start mb-4">
@@ -3608,7 +3690,7 @@
                             <h4 class="font-bold text-lg">Entry #${idx + 1}</h4>
                             <p class="text-xs text-slate-500">Submitted: ${new Date(entry.submittedAt).toLocaleDateString()}</p>
                         </div>
-                        ${beforeDeadline ? '<button class="text-sm px-3 py-1 rounded" style="background:rgba(196,163,90,0.15);border:1px solid rgba(196,163,90,0.3);color:#c4a35a;" onclick="editEntry(\'' + entry.id + '\')">Edit</button>' : '<span class="text-xs px-2 py-1 rounded" style="background:rgba(100,116,139,0.2);color:#94a3b8;">Locked</span>'}
+                        ${editable ? '<button class="text-sm px-3 py-1 rounded" style="background:rgba(196,163,90,0.15);border:1px solid rgba(196,163,90,0.3);color:#c4a35a;" onclick="editEntry(\'' + entry.id + '\')">Edit Picks</button>' : '<span class="text-xs px-2 py-1 rounded" style="background:rgba(100,116,139,0.2);color:#94a3b8;">Locked</span>'}
                     </div>
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                         <div><span class="text-slate-400 text-xs block">Group A</span><span class="font-semibold">${entry.groupA || '—'}</span></div>
@@ -3628,9 +3710,9 @@
         // Edit an existing entry — load picks into the entry form
         let editingEntryId = null;
         function editEntry(entryId) {
-            if (!isBeforeDeadline()) { alert('Submissions are closed.'); return; }
             const entry = userEntries.find(e => e.id === entryId);
             if (!entry) return;
+            if (!canEditEntry(entry)) { alert('This entry is currently locked. Contact the pool commissioner to enable editing.'); return; }
             editingEntryId = entryId;
             entryCurrentStep = 1; // skip info step, go to Group A
             entryPicks = {
