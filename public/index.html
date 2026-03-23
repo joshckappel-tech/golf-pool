@@ -2468,7 +2468,7 @@
                 totalEl.style.color = Math.abs(total - 100) < 0.01 ? '#c4a35a' : '#ef4444';
             }
             // Update pool display with dollar amounts per position
-            const fee = parseInt((document.getElementById('admin-entry-fee') || {}).value.replace(/[^0-9]/g,'')) || 30;
+            const fee = parseFloat((document.getElementById('admin-entry-fee') || {}).value.replace(/[^0-9.]/g,'')) || 30;
             const entriesEl = document.getElementById('admin-pool-entries');
             const poolTotalEl = document.getElementById('admin-pool-total');
             // Fetch entry count for display and compute dollar amounts
@@ -2578,7 +2578,7 @@
         function onEntryFeeChange() {
             const el = document.getElementById('admin-entry-fee');
             if (!el) return;
-            const fee = parseInt(el.value.replace(/[^0-9]/g,'')) || 30;
+            const fee = parseFloat(el.value.replace(/[^0-9.]/g,'')) || 30;
             poolSettings.entryFee = fee;
             // Update all entry fee displays across the site
             document.querySelectorAll('.entry-fee-display').forEach(span => {
@@ -2603,7 +2603,7 @@
                 return;
             }
 
-            const entryFee = parseInt((document.getElementById('admin-entry-fee') || {}).value.replace(/[^0-9]/g,'')) || 30;
+            const entryFee = parseFloat((document.getElementById('admin-entry-fee') || {}).value.replace(/[^0-9.]/g,'')) || 30;
 
             const projectedPayouts = getAdminProjectedPayouts();
             const settings = {
