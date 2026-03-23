@@ -649,6 +649,7 @@
                         <select id="entryHighlightSelect" class="search-input" style="max-width:260px; flex:1;" onchange="onEntryHighlightChange()">
                             <option value="">— Select an entry —</option>
                         </select>
+                        <span id="entryHighlightCount" style="font-size:0.8rem; color:#64748b;"></span>
                         <span id="entryHighlightInfo" style="font-size:0.8rem; color:#94a3b8;"></span>
                     </div>
                     <div class="flex gap-4 mb-4">
@@ -1668,16 +1669,19 @@
                 console.log('Could not load entries:', e);
             }
 
-            if (entries.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:20px; color:#94a3b8;">No entries submitted yet. Be the first to enter!</td></tr>';
+            // Only include paid entries in pool leaderboard
+            const paidEntries = entries.filter(e => e.paymentStatus === 'paid');
+
+            if (paidEntries.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:20px; color:#94a3b8;">' + (entries.length > 0 ? 'No paid entries yet. Entries appear here once payment is confirmed.' : 'No entries submitted yet. Be the first to enter!') + '</td></tr>';
                 // Update header
                 const statusEl = document.querySelector('#leaderboard .status-badge');
                 if (statusEl) statusEl.textContent = '0 Entries';
                 return;
             }
 
-            // Calculate standings for each entry
-            const standings = entries.map(entry => {
+            // Calculate standings for each paid entry
+            const standings = paidEntries.map(entry => {
                 const pickA = entry.groupA || entry.pickGroupA || '';
                 const pickB = entry.groupB || entry.pickGroupB || '';
                 const pickC = entry.groupC || entry.pickGroupC || '';
@@ -1725,7 +1729,7 @@
 
             // Calculate payouts
             const entryFee = poolSettings.entryFee || 30;
-            const payouts = getPayoutStructure(entries.length, entryFee);
+            const payouts = getPayoutStructure(paidEntries.length, entryFee);
             standings.forEach(s => {
                 const p = payouts.find(p => p.place === s.rank);
                 s.payout = p ? p.amount : 0;
@@ -1737,7 +1741,7 @@
             // Update header
             const statusEl = document.querySelector('#leaderboard .status-badge');
             if (statusEl) {
-                statusEl.textContent = entries.length + ' Entries — ' + (liveScoresReady ? 'Live Scores' : 'Pending Scores');
+                statusEl.textContent = paidEntries.length + ' Paid Entries — ' + (liveScoresReady ? 'Live Scores' : 'Pending Scores');
                 statusEl.className = 'status-badge ' + (liveScoresReady ? 'status-in-progress' : 'status-setup');
             }
 
@@ -2116,15 +2120,15 @@
             const scenarioPrizeMap = calculateProjectedPrizes(adjustedScores);
             const originalPrizeMap = livePrizeMap && Object.keys(livePrizeMap).length > 0 ? livePrizeMap : calculateProjectedPrizes(tournamentScores);
 
-            // Fetch entries and build pool standings (same logic as loadAndRenderPoolLeaderboard)
+            // Fetch entries and build pool standings — only paid entries
             let entries = [];
             try {
                 const res = await fetch('/api/entries');
-                if (res.ok) entries = await res.json();
+                if (res.ok) entries = (await res.json()).filter(e => e.paymentStatus === 'paid');
             } catch (e) {}
 
             if (entries.length === 0) {
-                impactEl.innerHTML = '<p class="text-slate-500 text-sm">No entries submitted yet. Pool impact requires entries.</p>';
+                impactEl.innerHTML = '<p class="text-slate-500 text-sm">No paid entries yet. Pool impact requires confirmed payments.</p>';
                 return;
             }
 
@@ -3139,6 +3143,9 @@
                         sel.appendChild(opt);
                     });
                     if (prev) sel.value = prev;
+                    // Show total entry count
+                    const countSpan = document.getElementById('entryHighlightCount');
+                    if (countSpan) countSpan.textContent = entriesCache.length + ' entries';
                 }
             } catch (e) { console.log('Could not load entries for selector:', e); }
         }
