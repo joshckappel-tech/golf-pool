@@ -5399,6 +5399,29 @@
                 tiebreaker: entryPicks.tiebreaker,
             };
 
+            // If not already editing, check for existing entry with same name and update it instead
+            if (!editingEntryId) {
+                try {
+                    const checkRes = await fetch('/api/entries');
+                    if (checkRes.ok) {
+                        const allEntries = await checkRes.json();
+                        const duplicate = allEntries.find(e =>
+                            (e.entryName || '').toLowerCase() === entry.entryName.toLowerCase()
+                        );
+                        if (duplicate) {
+                            // Same user's entry (or same name) — update instead of creating new
+                            if (duplicate.userId === (currentUser ? currentUser.id : null)) {
+                                editingEntryId = duplicate.id;
+                            } else {
+                                // Different user owns this entry name — block it
+                                alert('An entry with the name "' + entry.entryName + '" already exists. Please go back and choose a unique entry name.');
+                                return;
+                            }
+                        }
+                    }
+                } catch (e) { /* proceed if check fails */ }
+            }
+
             try {
                 let res;
                 if (editingEntryId) {
