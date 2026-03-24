@@ -710,7 +710,7 @@
                 <div id="pool-standings-locked" style="display:none; text-align:center; padding:60px 20px;">
                     <div style="font-size:3rem; margin-bottom:16px;">🔒</div>
                     <h3 style="font-size:1.4rem; font-weight:700; color:#e2e8f0; margin-bottom:8px;">Pool Standings Not Yet Available</h3>
-                    <p style="color:#94a3b8; font-size:1rem;">Pool standings will be visible once the submission deadline has passed.</p>
+                    <p style="color:#94a3b8; font-size:1rem;">Pool standings will be visible once the submission deadline has passed and the pool is live.</p>
                 </div>
                 <div id="pool-standings-content">
                 <div class="mb-6">
@@ -777,7 +777,7 @@
                 <div id="scenario-locked" style="display:none; text-align:center; padding:60px 20px;">
                     <div style="font-size:3rem; margin-bottom:16px;">🔒</div>
                     <h3 style="font-size:1.4rem; font-weight:700; color:#e2e8f0; margin-bottom:8px;">Scenario Generator Not Yet Available</h3>
-                    <p style="color:#94a3b8; font-size:1rem;">The scenario generator will be available once the submission deadline has passed.</p>
+                    <p style="color:#94a3b8; font-size:1rem;">The scenario generator will be available once the submission deadline has passed and the pool is live.</p>
                 </div>
                 <div id="scenario-content">
                 <h2 class="text-3xl font-bold mb-6">Scenario Generator</h2>
@@ -824,7 +824,7 @@
                             <h2 class="text-3xl font-bold mb-2">My Entries</h2>
                             <p class="text-slate-400" id="myentries-subtitle">View and manage your tournament entries</p>
                         </div>
-                        <button class="button-primary" id="new-entry-btn" onclick="goToTab('entry')">+ New Entry</button>
+                        <button class="button-primary" id="new-entry-btn" onclick="startNewEntry()">+ New Entry</button>
                     </div>
                 </div>
                 <div id="myentries-container">
@@ -891,10 +891,10 @@
                                 </div>
                                 <div>
                                     <p class="text-xs text-slate-400 mb-1">Status</p>
-                                    <select class="w-full bg-green-900/20 border border-green-700/30 rounded px-3 py-2 text-sm">
-                                        <option>Entries Open</option>
-                                        <option>In Progress</option>
-                                        <option>Completed</option>
+                                    <select id="admin-pool-status" class="w-full bg-green-900/20 border border-green-700/30 rounded px-3 py-2 text-sm">
+                                        <option value="closed">Closed</option>
+                                        <option value="entries_open" selected>Entries Open</option>
+                                        <option value="live">Live</option>
                                     </select>
                                 </div>
                                 <div>
@@ -1046,10 +1046,11 @@
                                     <th>Submitted</th>
                                     <th>Payment</th>
                                     <th>Editable</th>
+                                    <th>Status</th>
                                 </tr>
                             </thead>
                             <tbody id="admin-entries-body">
-                                <tr><td colspan="13" style="text-align:center; padding:20px; color:#94a3b8;">Click "Refresh Entries" to load entries</td></tr>
+                                <tr><td colspan="14" style="text-align:center; padding:20px; color:#94a3b8;">Click "Refresh Entries" to load entries</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -1841,6 +1842,11 @@
                         poolSettings.golferGroups.forEach(g => allGolfers.push(g));
                         golferGroups = getGolferGroupNames();
                     }
+                    // Sync pool status dropdown
+                    const statusEl = document.getElementById('admin-pool-status');
+                    if (statusEl && poolSettings.poolStatus) {
+                        statusEl.value = poolSettings.poolStatus;
+                    }
                 }
                 // Update home stats AFTER settings are loaded so entry fee is correct
                 updateHomeStats();
@@ -2095,10 +2101,10 @@
             const tbody = document.getElementById('leaderboardBody');
             if (!tbody) return;
 
-            // Hide pool standings before deadline (unless admin)
+            // Hide pool standings before deadline or when not live (unless admin)
             const lockedEl = document.getElementById('pool-standings-locked');
             const contentEl = document.getElementById('pool-standings-content');
-            if (isBeforeDeadline() && !isAdminUser) {
+            if ((isBeforeDeadline() || !isPoolLive()) && !isAdminUser) {
                 if (lockedEl) lockedEl.style.display = 'block';
                 if (contentEl) contentEl.style.display = 'none';
                 return;
@@ -2125,8 +2131,8 @@
                 console.log('Could not load entries:', e);
             }
 
-            // Only include paid entries in pool leaderboard
-            const paidEntries = entries.filter(e => e.paymentStatus === 'paid');
+            // Only include paid, non-rejected entries in pool leaderboard
+            const paidEntries = entries.filter(e => e.paymentStatus === 'paid' && e.entryStatus !== 'rejected');
 
             if (paidEntries.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:20px; color:#94a3b8;">' + (entries.length > 0 ? 'No paid entries yet. Entries appear here once payment is confirmed.' : 'No entries submitted yet. Be the first to enter!') + '</td></tr>';
@@ -2328,8 +2334,9 @@
             try {
                 const res = await fetch('/api/entries');
                 if (!res.ok) return;
-                const entries = await res.json();
-                const count = Array.isArray(entries) ? entries.length : 0;
+                const allEntries = await res.json();
+                const entries = Array.isArray(allEntries) ? allEntries.filter(e => e.entryStatus !== 'rejected') : [];
+                const count = entries.length;
                 const fee = poolSettings.entryFee || 30;
                 const pool = count * fee;
 
@@ -2376,7 +2383,7 @@
             const tbody = document.getElementById('admin-entries-body');
             const countEl = document.getElementById('admin-entries-count');
             if (!tbody) return;
-            tbody.innerHTML = '<tr><td colspan="13" style="text-align:center; padding:20px; color:#94a3b8;">Loading entries...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="14" style="text-align:center; padding:20px; color:#94a3b8;">Loading entries...</td></tr>';
 
             // Sync the override checkbox
             const overrideEl = document.getElementById('admin-edit-override');
@@ -2390,7 +2397,7 @@
                 if (countEl) countEl.textContent = entries.length + ' total entries';
 
                 if (entries.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center; padding:20px; color:#94a3b8;">No entries submitted yet.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="14" style="text-align:center; padding:20px; color:#94a3b8;">No entries submitted yet.</td></tr>';
                     return;
                 }
 
@@ -2408,9 +2415,12 @@
                     const submitted = entry.submittedAt ? new Date(entry.submittedAt).toLocaleDateString() : '-';
                     const isPaid = entry.paymentStatus === 'paid';
                     const isEditable = entry.editable === true;
+                    const isRejected = entry.entryStatus === 'rejected';
                     const entryId = entry.id || i;
+                    const canReject = isEntriesOpen();
+                    const rowStyle = isRejected ? ' style="opacity:0.5;"' : '';
 
-                    html += `<tr>
+                    html += `<tr${rowStyle}>
                         <td>${i + 1}</td>
                         <td class="font-semibold">${name}</td>
                         <td class="text-sm">${email}</td>
@@ -2432,12 +2442,18 @@
                                 ${isEditable ? '✓ On' : '✗ Off'}
                             </button>
                         </td>
+                        <td>
+                            ${isRejected
+                                ? '<button onclick="rejectEntry(\'' + entryId + '\', false)" class="text-xs px-2 py-1 rounded cursor-pointer" style="background:rgba(239,68,68,0.2);color:#ef4444;border:1px solid rgba(239,68,68,0.4);">Rejected</button>'
+                                : (canReject ? '<button onclick="rejectEntry(\'' + entryId + '\', true)" class="text-xs px-2 py-1 rounded cursor-pointer" style="background:rgba(22,163,74,0.2);color:#22c55e;border:1px solid rgba(22,163,74,0.4);">Active</button>' : '<span class="text-xs text-slate-500">Active</span>')
+                            }
+                        </td>
                     </tr>`;
                 });
                 tbody.innerHTML = html;
             } catch (e) {
                 console.log('Error loading admin entries:', e);
-                tbody.innerHTML = '<tr><td colspan="13" style="text-align:center; padding:20px; color:#ef4444;">Failed to load entries.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="14" style="text-align:center; padding:20px; color:#ef4444;">Failed to load entries.</td></tr>';
             }
         }
 
@@ -2455,6 +2471,24 @@
                 }
             } catch (e) {
                 alert('Error updating payment status.');
+            }
+        }
+
+        async function rejectEntry(entryId, reject) {
+            if (reject && !confirm('Are you sure you want to reject this entry? It will be excluded from the pool leaderboard and entry count.')) return;
+            try {
+                const res = await fetch('/api/entries', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: entryId, entryStatus: reject ? 'rejected' : 'active' })
+                });
+                if (res.ok) {
+                    loadAdminEntries();
+                } else {
+                    alert('Failed to update entry status.');
+                }
+            } catch (e) {
+                alert('Error updating entry status.');
             }
         }
 
@@ -2512,7 +2546,8 @@
             try {
                 const res = await fetch('/api/entries');
                 if (!res.ok) return;
-                const entries = await res.json();
+                const allEntries = await res.json();
+                const entries = allEntries.filter(e => e.entryStatus !== 'rejected');
                 const count = entries.length;
                 const fee = poolSettings.entryFee || 30;
                 const paid = entries.filter(e => e.paymentStatus === 'paid').length;
@@ -2552,10 +2587,10 @@
             const container = document.getElementById('scenario-leaderboard');
             if (!container) return;
 
-            // Hide scenario generator before deadline (unless admin)
+            // Hide scenario generator before deadline or when not live (unless admin)
             const lockedEl = document.getElementById('scenario-locked');
             const contentEl = document.getElementById('scenario-content');
-            if (isBeforeDeadline() && !isAdminUser) {
+            if ((isBeforeDeadline() || !isPoolLive()) && !isAdminUser) {
                 if (lockedEl) lockedEl.style.display = 'block';
                 if (contentEl) contentEl.style.display = 'none';
                 return;
@@ -2646,7 +2681,7 @@
             let entries = [];
             try {
                 const res = await fetch('/api/entries');
-                if (res.ok) entries = (await res.json()).filter(e => e.paymentStatus === 'paid');
+                if (res.ok) entries = (await res.json()).filter(e => e.paymentStatus === 'paid' && e.entryStatus !== 'rejected');
             } catch (e) {}
 
             if (entries.length === 0) {
@@ -2807,6 +2842,14 @@
         function renderEntryMainContent() {
             const el = document.getElementById('entry-main-content');
             if (!el) return;
+
+            // Block entry form when pool is not accepting entries
+            if (!isEntriesOpen() || !isBeforeDeadline()) {
+                const reason = !isEntriesOpen() ? 'The pool is currently ' + (isPoolLive() ? 'live' : 'closed') + ' and not accepting new entries.' : 'The submission deadline has passed.';
+                el.innerHTML = '<div style="text-align:center; padding:60px 20px;"><div style="font-size:3rem; margin-bottom:16px;">🔒</div><h3 style="font-size:1.4rem; font-weight:700; color:#e2e8f0; margin-bottom:8px;">Entries Closed</h3><p style="color:#94a3b8; font-size:1rem;">' + reason + '</p></div>';
+                return;
+            }
+
             const step = entrySteps[entryCurrentStep];
 
             if (step === 'info') {
@@ -3348,6 +3391,7 @@
                 selectedTournamentKey: newTournamentKey,
                 payoutPcts: payoutPcts,
                 projectedPayouts: projectedPayouts,
+                poolStatus: (document.getElementById('admin-pool-status') || {}).value || 'entries_open',
             };
             const poolPw = (document.getElementById('admin-pool-pw') || {}).value;
             if (poolPw && poolPw.length >= 4) settings.poolPassword = poolPw;
@@ -3484,6 +3528,22 @@
             entrySubmitted = false;
             entryPicks = { name: '', email: '', entryName: '', A: null, B: null, C: null, D: null, WC1: null, WC2: null, tiebreaker: null };
             renderEntryForm();
+        }
+
+        function startNewEntry() {
+            entryCurrentStep = 0;
+            entrySubmitted = false;
+            entryPicks.name = '';
+            entryPicks.email = '';
+            entryPicks.entryName = '';
+            entryPicks.A = null;
+            entryPicks.B = null;
+            entryPicks.C = null;
+            entryPicks.D = null;
+            entryPicks.WC1 = null;
+            entryPicks.WC2 = null;
+            entryPicks.tiebreaker = null;
+            goToTab('entry');
         }
 
         // =====================================================
@@ -4048,6 +4108,7 @@
             selectedTournamentKey: 'valspar',
             oddsApiKey: '',
             golferGroups: null,
+            poolStatus: 'entries_open', // 'closed', 'entries_open', 'live'
         };
 
         // Load saved session on page load
@@ -4439,27 +4500,39 @@
             return new Date() < new Date(poolSettings.submissionDeadline);
         }
 
+        function getPoolStatus() {
+            return poolSettings.poolStatus || 'entries_open';
+        }
+
+        function isPoolLive() {
+            return getPoolStatus() === 'live';
+        }
+
+        function isEntriesOpen() {
+            return getPoolStatus() === 'entries_open';
+        }
+
         // Check if a specific entry can be edited by the participant
         function canEditEntry(entry) {
             // If admin explicitly set editable=true on this entry, allow it
             if (entry.editable === true) {
                 // Still respect the deadline UNLESS admin checked the override
-                if (isBeforeDeadline()) return true;
+                if (isBeforeDeadline() && isEntriesOpen()) return true;
                 if (poolSettings.editOverrideDeadline) return true;
                 return false;
             }
-            // If editable is not explicitly set, fall back to deadline only
-            return isBeforeDeadline();
+            // If editable is not explicitly set, fall back to deadline + entries open
+            return isBeforeDeadline() && isEntriesOpen();
         }
 
         function renderMyEntries() {
             const container = document.getElementById('myentries-container');
             if (!container) return;
-            const beforeDeadline = isBeforeDeadline();
+            const canSubmitNew = isBeforeDeadline() && isEntriesOpen();
             const subtitle = document.getElementById('myentries-subtitle');
             const newBtn = document.getElementById('new-entry-btn');
 
-            if (beforeDeadline) {
+            if (canSubmitNew) {
                 if (subtitle) subtitle.textContent = 'Submissions are open. You can edit your entries until the tournament starts.';
                 if (newBtn) newBtn.classList.remove('hidden');
             } else {
@@ -4471,7 +4544,7 @@
                 container.innerHTML = `
                     <div class="stat-card text-center py-12">
                         <p class="text-xl text-slate-400 mb-4">You haven't submitted any entries yet</p>
-                        ${beforeDeadline ? '<button class="button-primary" onclick="goToTab(\'entry\')">Enter the Tournament</button>' : '<p class="text-slate-500">Submissions are closed for this tournament.</p>'}
+                        ${canSubmitNew ? '<button class="button-primary" onclick="startNewEntry()">Enter the Tournament</button>' : '<p class="text-slate-500">Submissions are closed for this tournament.</p>'}
                     </div>`;
                 return;
             }
@@ -4519,7 +4592,7 @@
 
         // Delete an entry (only before deadline)
         async function deleteEntry(entryId, entryName) {
-            if (!isBeforeDeadline()) { alert('Submissions are closed. Entries can no longer be deleted.'); return; }
+            if (!isBeforeDeadline() || !isEntriesOpen()) { alert('Submissions are closed. Entries can no longer be deleted.'); return; }
             if (!confirm('Are you sure you want to delete "' + entryName + '"? This cannot be undone.')) return;
             try {
                 const res = await fetch('/api/entries', {
@@ -4788,6 +4861,7 @@
                 userId: currentUser ? currentUser.id : null,
                 name: entryPicks.name,
                 email: entryPicks.email,
+                entryName: entryPicks.entryName || (entryPicks.name + '_1'),
                 groupA: entryPicks.A,
                 groupB: entryPicks.B,
                 groupC: entryPicks.C,
