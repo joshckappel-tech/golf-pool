@@ -3374,14 +3374,14 @@
                         <button class="button-secondary" onclick="entryBack()">Back</button>
                     </div>`;
             } else if (step === 'WC') {
-                // All golfers sorted by name for wild card selection
-                const wcAll = [...allGolfers].sort((a,b) => a.name.localeCompare(b.name));
+                // Only wild card group golfers, sorted by name
+                const wcAll = allGolfers.filter(g => g.group === 'WC').sort((a,b) => a.name.localeCompare(b.name));
                 const wc1 = entryPicks.WC1;
                 const wc2 = entryPicks.WC2;
                 el.innerHTML = `
                     <div class="mb-6">
                         <h3 class="text-2xl font-bold mb-2">Pick 2 Wild Cards</h3>
-                        <p class="text-slate-400">Select any 2 golfers from the entire field. Wild card earnings are doubled (2x).</p>
+                        <p class="text-slate-400">Select 2 golfers from the Wild Card group. Wild card earnings are doubled (2x).</p>
                         <div class="mt-3">
                             <input type="text" id="wc-search" class="search-input" placeholder="Search golfers..." onkeyup="filterWCGolfers()">
                         </div>
