@@ -526,39 +526,247 @@
             background: rgba(239, 68, 68, 0.2);
             color: #fca5a5;
         }
+
+        /* =====================================================
+           MOBILE-FRIENDLY TAB NAVIGATION
+           ===================================================== */
+        .tab-nav-scroll {
+            overflow-x: auto;
+            overflow-y: hidden;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none; /* Firefox */
+        }
+        .tab-nav-scroll::-webkit-scrollbar {
+            display: none; /* Chrome/Safari */
+        }
+        .tab-nav-inner {
+            display: flex;
+            gap: 0;
+            white-space: nowrap;
+            min-width: max-content;
+            padding-bottom: 2px;
+        }
+        .tab-nav-inner .tab-button {
+            padding: 10px 16px;
+            font-size: 0.875rem;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        /* =====================================================
+           RESPONSIVE BREAKPOINTS
+           ===================================================== */
+
+        /* Small phones (up to 480px) */
+        @media (max-width: 480px) {
+            .tab-nav-inner .tab-button {
+                padding: 8px 12px;
+                font-size: 0.8rem;
+            }
+
+            /* Hero section */
+            .hero-gradient {
+                padding: 24px 16px !important;
+            }
+            .hero-gradient h2 {
+                font-size: 1.5rem !important;
+            }
+            .hero-gradient p {
+                font-size: 0.9rem !important;
+            }
+
+            /* Stat cards */
+            .stat-card {
+                padding: 14px;
+            }
+
+            /* Step indicator for entry form */
+            .step-indicator {
+                margin-bottom: 20px;
+            }
+            .step-circle {
+                width: 32px;
+                height: 32px;
+                font-size: 0.8rem;
+            }
+            .step-label {
+                font-size: 0.6rem;
+            }
+
+            /* Golfer cards in entry form */
+            .golfer-card {
+                padding: 10px;
+            }
+
+            /* Main content padding */
+            main {
+                padding-left: 8px !important;
+                padding-right: 8px !important;
+                padding-top: 16px !important;
+            }
+
+            /* Scenario panels */
+            .scenario-panel {
+                padding: 12px;
+            }
+        }
+
+        /* Tablets and below (up to 768px) */
+        @media (max-width: 768px) {
+            /* Tables: wrap in scroll container */
+            .leaderboard-table,
+            .entry-table {
+                font-size: 0.75rem;
+            }
+            .leaderboard-table th,
+            .leaderboard-table td,
+            .entry-table th,
+            .entry-table td {
+                padding: 8px 4px;
+            }
+
+            /* Entry form: full-width golfer cards */
+            .golfer-card {
+                padding: 12px;
+            }
+
+            /* Stack grid items vertically */
+            .grid.grid-cols-2 {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            /* Buttons */
+            .button-primary,
+            .button-secondary {
+                padding: 8px 16px;
+                font-size: 0.85rem;
+            }
+
+            /* Scenario: stack panels */
+            .scenario-panel {
+                padding: 14px;
+            }
+
+            /* My Entries: stack header items */
+            .flex.justify-between.items-start {
+                flex-direction: column;
+                gap: 8px;
+            }
+        }
+
+        /* =====================================================
+           MOBILE TABLE SCROLL WRAPPERS
+           ===================================================== */
+        .table-scroll-wrapper {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            margin: 0 -4px;
+            padding: 0 4px;
+        }
+        .table-scroll-wrapper::-webkit-scrollbar {
+            height: 4px;
+        }
+        .table-scroll-wrapper::-webkit-scrollbar-track {
+            background: rgba(21, 128, 61, 0.1);
+        }
+        .table-scroll-wrapper::-webkit-scrollbar-thumb {
+            background: rgba(22, 163, 74, 0.4);
+            border-radius: 2px;
+        }
+
+        /* Minimum widths for tables so columns don't crush on mobile */
+        .leaderboard-table {
+            min-width: 600px;
+        }
+        .entry-table {
+            min-width: 800px;
+        }
+
+        /* =====================================================
+           MOBILE-FRIENDLY ENTRY FORM
+           ===================================================== */
+        @media (max-width: 640px) {
+            /* Entry form: single column layout */
+            #entry-main-content .grid.grid-cols-2,
+            #entry-main-content .grid.md\\:grid-cols-2,
+            #entry-main-content .grid.md\\:grid-cols-3,
+            #entry-main-content .grid.md\\:grid-cols-4 {
+                grid-template-columns: 1fr !important;
+            }
+
+            /* Entry sidebar: collapse on mobile */
+            #entry-sidebar {
+                display: none;
+            }
+
+            /* My Entries cards: fix layout */
+            #myentries-container .grid.grid-cols-2.md\\:grid-cols-4 {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            /* Admin tab: single column */
+            .grid.md\\:grid-cols-2 {
+                grid-template-columns: 1fr !important;
+            }
+
+            /* Pool standings: make scrollable */
+            #pool-standings-content .leaderboard-scroll {
+                margin: 0 -8px;
+                padding: 0 8px;
+            }
+        }
+
+        /* =====================================================
+           MOBILE-FRIENDLY MODALS
+           ===================================================== */
+        @media (max-width: 640px) {
+            #auth-modal > div,
+            #correction-review-modal > div {
+                max-width: 100% !important;
+                margin: 8px !important;
+                border-radius: 8px !important;
+                max-height: 90vh !important;
+            }
+        }
     </style>
 </head>
 <body class="min-h-screen">
     <div class="min-h-screen">
         <!-- Header -->
-        <header class="border-b border-green-900/30 sticky top-0 z-50 backdrop-blur-sm bg-opacity-90" style="background: rgba(15, 23, 42, 0.9);">
+        <header class="border-b border-green-900/30 sticky top-0 z-50 backdrop-blur-sm bg-opacity-90" style="background: rgba(15, 23, 42, 0.95);">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div class="flex items-center justify-between h-16">
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-full flex items-center justify-center" style="background: linear-gradient(135deg, #16a34a, #c4a35a);">
-                            <span style="color: #0f172a; font-weight: 700;">⛳</span>
+                <!-- Top bar: logo + user menu -->
+                <div class="flex items-center justify-between h-14 sm:h-16">
+                    <div class="flex items-center gap-2 sm:gap-3">
+                        <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0" style="background: linear-gradient(135deg, #16a34a, #c4a35a);">
+                            <span style="color: #0f172a; font-weight: 700; font-size: 0.9rem;">⛳</span>
                         </div>
-                        <h1 class="text-2xl font-bold" style="color: #c4a35a;">Grand Slam Golf Pools</h1>
+                        <h1 class="text-lg sm:text-2xl font-bold" style="color: #c4a35a; white-space: nowrap;">Grand Slam Golf Pools</h1>
                     </div>
-                    <div id="user-menu" class="flex items-center gap-3">
-                        <button id="login-btn" class="text-sm px-4 py-2 rounded font-semibold" style="background:rgba(22,163,74,0.2); border:1px solid rgba(22,163,74,0.4); color:#16a34a;" onclick="showAuthModal('login')">Log In</button>
-                        <button id="signup-btn" class="text-sm px-4 py-2 rounded font-semibold" style="background:linear-gradient(135deg,#16a34a,#c4a35a); color:#0f172a;" onclick="showAuthModal('register')">Sign Up</button>
-                        <div id="user-info" class="hidden flex items-center gap-3">
-                            <span id="user-display-name" class="text-sm text-slate-300"></span>
-                            <button class="text-xs px-3 py-1 rounded" style="background:rgba(100,116,139,0.2); border:1px solid rgba(100,116,139,0.3); color:#94a3b8;" onclick="logoutUser()">Log Out</button>
+                    <div id="user-menu" class="flex items-center gap-2 sm:gap-3">
+                        <button id="login-btn" class="text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 rounded font-semibold" style="background:rgba(22,163,74,0.2); border:1px solid rgba(22,163,74,0.4); color:#16a34a;" onclick="showAuthModal('login')">Log In</button>
+                        <button id="signup-btn" class="text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 rounded font-semibold" style="background:linear-gradient(135deg,#16a34a,#c4a35a); color:#0f172a;" onclick="showAuthModal('register')">Sign Up</button>
+                        <div id="user-info" class="hidden flex items-center gap-2 sm:gap-3">
+                            <span id="user-display-name" class="text-xs sm:text-sm text-slate-300 hidden sm:inline"></span>
+                            <button class="text-xs px-2 sm:px-3 py-1 rounded" style="background:rgba(100,116,139,0.2); border:1px solid rgba(100,116,139,0.3); color:#94a3b8;" onclick="logoutUser()">Log Out</button>
                         </div>
                     </div>
-                    <nav class="flex gap-2 flex-wrap" style="border-bottom: 2px solid rgba(22, 163, 74, 0.2); margin-bottom: -1px;">
+                </div>
+            </div>
+            <!-- Tab navigation: horizontally scrollable on mobile -->
+            <nav class="tab-nav-scroll" style="border-top: 1px solid rgba(22, 163, 74, 0.15);">
+                <div class="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8">
+                    <div class="tab-nav-inner">
                         <button class="tab-button active" onclick="switchTab('home')">Home</button>
                         <button class="tab-button" onclick="switchTab('tournament')">Tournament</button>
-                        <button class="tab-button" onclick="switchTab('leaderboard')">Pool Leaderboard</button>
+                        <button class="tab-button" onclick="switchTab('leaderboard')">Pool Standings</button>
                         <button class="tab-button" onclick="switchTab('entry')">Entry Form</button>
                         <button class="tab-button hidden" id="my-entries-tab" onclick="switchTab('myentries')">My Entries</button>
                         <button class="tab-button" onclick="switchTab('scenario')">Scenarios</button>
                         <button class="tab-button hidden" id="admin-tab-btn" onclick="switchTab('admin')">Admin</button>
-                    </nav>
+                    </div>
                 </div>
-            </div>
+            </nav>
         </header>
 
         <!-- Content -->
@@ -567,8 +775,8 @@
             <div id="home" class="tab-pane active">
                 <!-- Hero Section -->
                 <section class="hero-gradient rounded-xl p-8 mb-12 text-center">
-                    <h2 class="text-5xl font-bold mb-2" style="color: #c4a35a;">Welcome to the Valspar Championship Pool</h2>
-                    <p class="text-xl text-slate-200">Pick your golfers. Track the action. Win the pool.</p>
+                    <h2 class="text-2xl sm:text-4xl lg:text-5xl font-bold mb-2" style="color: #c4a35a;">Welcome to the Valspar Championship Pool</h2>
+                    <p class="text-base sm:text-xl text-slate-200">Pick your golfers. Track the action. Win the pool.</p>
                 </section>
 
                 <!-- Active Tournament Card -->
@@ -645,7 +853,7 @@
                 <div class="mb-6">
                     <div id="tournament-header-info" class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
                         <div>
-                            <h2 id="tournamentNameDisplay" class="text-3xl font-bold mb-2">2026 Valspar Championship</h2>
+                            <h2 id="tournamentNameDisplay" class="text-2xl sm:text-3xl font-bold mb-2">2026 Valspar Championship</h2>
                             <p class="text-slate-400" id="tournamentCourseDisplay">Copperhead Course at Innisbrook Resort</p>
                         </div>
                         <div class="text-right">
@@ -658,17 +866,17 @@
                     <div id="tournament-leaderboard-content">
                     <div id="tournamentInfoBar" style="margin-bottom:12px; padding:8px 12px; background:rgba(255,255,255,0.05); border-radius:8px; font-size:0.9rem; color:#e2e8f0;"></div>
                     <!-- Entry Selector -->
-                    <div id="entryHighlightRow" style="margin-bottom:12px; padding:10px 14px; background:rgba(196,163,90,0.08); border:1px solid rgba(196,163,90,0.2); border-radius:8px; display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                    <div id="entryHighlightRow" style="margin-bottom:12px; padding:10px 14px; background:rgba(196,163,90,0.08); border:1px solid rgba(196,163,90,0.2); border-radius:8px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                         <label style="font-size:0.85rem; font-weight:600; color:#c4a35a; white-space:nowrap;">Highlight Entry:</label>
-                        <select id="entryHighlightSelect" class="search-input" style="max-width:260px; flex:1;" onchange="onEntryHighlightChange()">
+                        <select id="entryHighlightSelect" class="search-input" style="max-width:260px; min-width:150px; flex:1;" onchange="onEntryHighlightChange()">
                             <option value="">— Select an entry —</option>
                         </select>
                         <span id="entryHighlightCount" style="font-size:0.8rem; color:#64748b;"></span>
                         <span id="entryHighlightInfo" style="font-size:0.8rem; color:#94a3b8;"></span>
                     </div>
-                    <div class="flex gap-4 mb-4">
+                    <div class="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-4">
                         <input type="text" id="tournamentSearchInput" class="search-input flex-1" placeholder="Search golfer..." onkeyup="filterTournamentLeaderboard()">
-                        <select id="tournamentFilterGroup" class="search-input" style="max-width:180px;" onchange="filterTournamentLeaderboard()">
+                        <select id="tournamentFilterGroup" class="search-input sm:max-w-[180px]" onchange="filterTournamentLeaderboard()">
                             <option value="all">All Golfers</option>
                             <option value="active">Made Cut</option>
                             <option value="cut">Missed Cut</option>
@@ -716,7 +924,7 @@
                 <div class="mb-6">
                     <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                         <div>
-                            <h2 class="text-3xl font-bold mb-2">Pool Standings</h2>
+                            <h2 class="text-2xl sm:text-3xl font-bold mb-2">Pool Standings</h2>
                             <span class="status-badge status-setup">Loading...</span>
                         </div>
                         <div class="text-right">
@@ -763,7 +971,7 @@
             <!-- ENTRY FORM TAB (dynamically rendered from shared golfer data) -->
             <div id="entry" class="tab-pane">
                 <div class="mb-8">
-                    <h2 class="text-3xl font-bold mb-6">Join Tournament</h2>
+                    <h2 class="text-2xl sm:text-3xl font-bold mb-6">Join Tournament</h2>
                     <div id="entry-step-indicator"></div>
                 </div>
                 <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -780,7 +988,7 @@
                     <p style="color:#94a3b8; font-size:1rem;">The scenario generator will be available once the submission deadline has passed and the pool is live.</p>
                 </div>
                 <div id="scenario-content">
-                <h2 class="text-3xl font-bold mb-6">Scenario Generator</h2>
+                <h2 class="text-2xl sm:text-3xl font-bold mb-6">Scenario Generator</h2>
 
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <!-- Left Panel: Current Tournament Leaderboard with adjustments -->
@@ -821,7 +1029,7 @@
                 <div class="mb-6">
                     <div class="flex justify-between items-center mb-4">
                         <div>
-                            <h2 class="text-3xl font-bold mb-2">My Entries</h2>
+                            <h2 class="text-2xl sm:text-3xl font-bold mb-2">My Entries</h2>
                             <p class="text-slate-400" id="myentries-subtitle">View and manage your tournament entries</p>
                         </div>
                         <button class="button-primary" id="new-entry-btn" onclick="startNewEntry()">+ New Entry</button>
@@ -834,15 +1042,17 @@
 
             <!-- ADMIN TAB -->
             <div id="admin" class="tab-pane">
-                <h2 class="text-3xl font-bold mb-6">Admin Dashboard</h2>
+                <h2 class="text-2xl sm:text-3xl font-bold mb-6">Admin Dashboard</h2>
 
                 <!-- Admin Tabs -->
-                <div class="flex gap-4 mb-6 border-b border-green-900/30 overflow-x-auto">
-                    <button class="admin-tab-button active pb-3 px-1 border-b-2" style="border-color: #16a34a;" onclick="switchAdminTab('tournament')">Tournament Management</button>
-                    <button class="admin-tab-button pb-3 px-1" onclick="switchAdminTab('golfers')">Golfer Groups</button>
-                    <button class="admin-tab-button pb-3 px-1" onclick="switchAdminTab('entries')">Entry Management</button>
-                    <button class="admin-tab-button pb-3 px-1" onclick="switchAdminTab('accounts')">User Accounts</button>
-                    <button class="admin-tab-button pb-3 px-1" onclick="switchAdminTab('stats')">Stats</button>
+                <div class="tab-nav-scroll mb-6" style="border-bottom: 1px solid rgba(22, 163, 74, 0.2);">
+                    <div style="display:flex; gap:0; white-space:nowrap; min-width:max-content;">
+                        <button class="admin-tab-button active pb-3 px-3 border-b-2" style="border-color: #16a34a; font-size:0.85rem; white-space:nowrap;" onclick="switchAdminTab('tournament')">Tournament</button>
+                        <button class="admin-tab-button pb-3 px-3" style="font-size:0.85rem; white-space:nowrap;" onclick="switchAdminTab('golfers')">Golfer Groups</button>
+                        <button class="admin-tab-button pb-3 px-3" style="font-size:0.85rem; white-space:nowrap;" onclick="switchAdminTab('entries')">Entries</button>
+                        <button class="admin-tab-button pb-3 px-3" style="font-size:0.85rem; white-space:nowrap;" onclick="switchAdminTab('accounts')">Accounts</button>
+                        <button class="admin-tab-button pb-3 px-3" style="font-size:0.85rem; white-space:nowrap;" onclick="switchAdminTab('stats')">Stats</button>
+                    </div>
                 </div>
 
                 <!-- Tournament Management -->
