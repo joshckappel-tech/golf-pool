@@ -138,3 +138,41 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to update entry' }, { status: 500 })
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { id } = await request.json()
+    if (!id) {
+      return NextResponse.json({ error: 'Missing entry id' }, { status: 400 })
+    }
+
+    const db = await getDb()
+    let entries: any[]
+
+    if ('getAllEntries' in db) {
+      entries = await db.getAllEntries()
+    } else {
+      entries = await (db as any).getAllEntries()
+    }
+
+    const index = entries.findIndex((e: any) => e.id === id)
+    if (index === -1) {
+      return NextResponse.json({ error: 'Entry not found' }, { status: 404 })
+    }
+
+    entries.splice(index, 1)
+
+    if ('saveAllEntries' in db) {
+      await (db as any).saveAllEntries(entries)
+    } else {
+      const { Redis } = await import('@upstash/redis')
+      const kv = new Redis({ url: process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL || '', token: process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN || '' })
+      await kv.set('entries', entries)
+    }
+
+    return NextResponse.json({ success: true }, { status: 200 })
+  } catch (err) {
+    console.error('DELETE /api/entries error:', err)
+    return NextResponse.json({ error: 'Failed to delete entry' }, { status: 500 })
+  }
+}
