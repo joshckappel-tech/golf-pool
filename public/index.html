@@ -5409,8 +5409,10 @@
                             (e.entryName || '').toLowerCase() === entry.entryName.toLowerCase()
                         );
                         if (duplicate) {
-                            // Same user's entry (or same name) — update instead of creating new
+                            // Same user's entry (or same name) — confirm overwrite
                             if (duplicate.userId === (currentUser ? currentUser.id : null)) {
+                                const confirmUpdate = confirm('You already have an entry named "' + entry.entryName + '". Do you want to update it with your new picks?');
+                                if (!confirmUpdate) return;
                                 editingEntryId = duplicate.id;
                             } else {
                                 // Different user owns this entry name — block it
