@@ -1245,6 +1245,7 @@
                                 <tr>
                                     <th style="width:40px;">#</th>
                                     <th>Name</th>
+                                    <th>Entry Name</th>
                                     <th>Email</th>
                                     <th>Group A</th>
                                     <th>Group B</th>
@@ -1260,7 +1261,7 @@
                                 </tr>
                             </thead>
                             <tbody id="admin-entries-body">
-                                <tr><td colspan="14" style="text-align:center; padding:20px; color:#94a3b8;">Click "Refresh Entries" to load entries</td></tr>
+                                <tr><td colspan="15" style="text-align:center; padding:20px; color:#94a3b8;">Click "Refresh Entries" to load entries</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -2847,7 +2848,7 @@
             const tbody = document.getElementById('admin-entries-body');
             const countEl = document.getElementById('admin-entries-count');
             if (!tbody) return;
-            tbody.innerHTML = '<tr><td colspan="14" style="text-align:center; padding:20px; color:#94a3b8;">Loading entries...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="15" style="text-align:center; padding:20px; color:#94a3b8;">Loading entries...</td></tr>';
 
             // Sync the override checkbox
             const overrideEl = document.getElementById('admin-edit-override');
@@ -2861,13 +2862,14 @@
                 if (countEl) countEl.textContent = entries.length + ' total entries';
 
                 if (entries.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="14" style="text-align:center; padding:20px; color:#94a3b8;">No entries submitted yet.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="15" style="text-align:center; padding:20px; color:#94a3b8;">No entries submitted yet.</td></tr>';
                     return;
                 }
 
                 let html = '';
                 entries.forEach((entry, i) => {
                     const name = entry.name || entry.entrantName || 'Unknown';
+                    const entryDisplayName = entry.entryName || '-';
                     const email = entry.email || '-';
                     const gA = entry.groupA || entry.pickGroupA || '-';
                     const gB = entry.groupB || entry.pickGroupB || '-';
@@ -2887,6 +2889,7 @@
                     html += `<tr${rowStyle}>
                         <td>${i + 1}</td>
                         <td class="font-semibold">${name}</td>
+                        <td class="text-sm">${entryDisplayName}</td>
                         <td class="text-sm">${email}</td>
                         <td class="text-sm">${gA}</td>
                         <td class="text-sm">${gB}</td>
@@ -2917,7 +2920,7 @@
                 tbody.innerHTML = html;
             } catch (e) {
                 console.log('Error loading admin entries:', e);
-                tbody.innerHTML = '<tr><td colspan="14" style="text-align:center; padding:20px; color:#ef4444;">Failed to load entries.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="15" style="text-align:center; padding:20px; color:#ef4444;">Failed to load entries.</td></tr>';
             }
         }
 
@@ -3075,14 +3078,14 @@
                 const adj = scenarioAdjustments[p.name] || 0;
                 const adjustedScore = (p.score || 0) + adj;
                 const adjLabel = adj !== 0 ? ` (${adj > 0 ? '+' : ''}${adj})` : '';
-                const adjColor = adj < 0 ? '#ef4444' : adj > 0 ? '#22c55e' : '#94a3b8';
+                const adjColor = adj < 0 ? '#22c55e' : adj > 0 ? '#ef4444' : '#94a3b8';
 
                 html += `<div class="flex items-center gap-2 p-2 rounded" style="background:rgba(30,58,31,0.4); border:1px solid rgba(22,163,74,0.2);">
                     <span class="text-xs font-bold text-slate-400" style="width:30px;">${p.pos}</span>
                     <span class="text-sm font-semibold flex-1">${p.name}</span>
                     <span class="text-xs" style="color:${adjColor}; width:70px; text-align:right;">${formatScoreToPar(adjustedScore)}${adjLabel}</span>
-                    <button onclick="adjustScenario('${p.name.replace(/'/g, "\\'")}', -1)" class="text-xs px-2 py-1 rounded" style="background:rgba(239,68,68,0.2); color:#ef4444; border:1px solid rgba(239,68,68,0.3);">-1</button>
-                    <button onclick="adjustScenario('${p.name.replace(/'/g, "\\'")}', 1)" class="text-xs px-2 py-1 rounded" style="background:rgba(34,197,94,0.2); color:#22c55e; border:1px solid rgba(34,197,94,0.3);">+1</button>
+                    <button onclick="adjustScenario('${p.name.replace(/'/g, "\\'")}', -1)" class="text-xs px-2 py-1 rounded" style="background:rgba(34,197,94,0.2); color:#22c55e; border:1px solid rgba(34,197,94,0.3);">-1</button>
+                    <button onclick="adjustScenario('${p.name.replace(/'/g, "\\'")}', 1)" class="text-xs px-2 py-1 rounded" style="background:rgba(239,68,68,0.2); color:#ef4444; border:1px solid rgba(239,68,68,0.3);">+1</button>
                 </div>`;
             });
             container.innerHTML = html;
