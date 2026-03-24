@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Golf Pool - Tournament Management</title>
+    <title>Grand Slam Golf Pools</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         :root {
@@ -538,7 +538,7 @@
                         <div class="w-10 h-10 rounded-full flex items-center justify-center" style="background: linear-gradient(135deg, #16a34a, #c4a35a);">
                             <span style="color: #0f172a; font-weight: 700;">⛳</span>
                         </div>
-                        <h1 class="text-2xl font-bold" style="color: #c4a35a;">Golf Pool</h1>
+                        <h1 class="text-2xl font-bold" style="color: #c4a35a;">Grand Slam Golf Pools</h1>
                     </div>
                     <div id="user-menu" class="flex items-center gap-3">
                         <button id="login-btn" class="text-sm px-4 py-2 rounded font-semibold" style="background:rgba(22,163,74,0.2); border:1px solid rgba(22,163,74,0.4); color:#16a34a;" onclick="showAuthModal('login')">Log In</button>
@@ -624,6 +624,11 @@
                                 <li>• Real-time scenario generator</li>
                             </ul>
                         </div>
+                        <div class="stat-card">
+                            <h4 class="text-lg font-bold mb-3" style="color: #16a34a;">Payout Distribution</h4>
+                            <div id="home-payout-distribution" class="space-y-2 text-sm text-slate-300">
+                            </div>
+                        </div>
                     </div>
                 </section>
 
@@ -638,10 +643,10 @@
             <!-- TOURNAMENT LEADERBOARD TAB -->
             <div id="tournament" class="tab-pane">
                 <div class="mb-6">
-                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+                    <div id="tournament-header-info" class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
                         <div>
                             <h2 id="tournamentNameDisplay" class="text-3xl font-bold mb-2">2026 Valspar Championship</h2>
-                            <p class="text-slate-400">Copperhead Course at Innisbrook Resort</p>
+                            <p class="text-slate-400" id="tournamentCourseDisplay">Copperhead Course at Innisbrook Resort</p>
                         </div>
                         <div class="text-right">
                             <span id="tournament-round-status" class="status-badge status-in-progress">Round 3 - Complete</span>
@@ -702,6 +707,12 @@
 
             <!-- POOL LEADERBOARD TAB -->
             <div id="leaderboard" class="tab-pane">
+                <div id="pool-standings-locked" style="display:none; text-align:center; padding:60px 20px;">
+                    <div style="font-size:3rem; margin-bottom:16px;">🔒</div>
+                    <h3 style="font-size:1.4rem; font-weight:700; color:#e2e8f0; margin-bottom:8px;">Pool Standings Not Yet Available</h3>
+                    <p style="color:#94a3b8; font-size:1rem;">Pool standings will be visible once the submission deadline has passed.</p>
+                </div>
+                <div id="pool-standings-content">
                 <div class="mb-6">
                     <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                         <div>
@@ -729,23 +740,24 @@
                     <table class="leaderboard-table">
                         <thead>
                             <tr>
-                                <th style="width: 60px;">Rank</th>
-                                <th style="width: 150px;">Entrant</th>
-                                <th style="width: 140px;">Group A</th>
-                                <th style="width: 140px;">Group B</th>
-                                <th style="width: 140px;">Group C</th>
-                                <th style="width: 140px;">Group D</th>
-                                <th style="width: 160px;">Wild Card 1</th>
-                                <th style="width: 160px;">Wild Card 2</th>
-                                <th style="width: 120px;">Total</th>
-                                <th style="width: 100px;">TB</th>
-                                <th style="width: 100px;">Payout</th>
+                                <th style="width: 60px; cursor:pointer;" onclick="sortPoolStandings('rank')">Rank <span id="sort-icon-rank">▼</span></th>
+                                <th style="width: 150px; cursor:pointer;" onclick="sortPoolStandings('name')">Entrant <span id="sort-icon-name"></span></th>
+                                <th style="width: 140px; cursor:pointer;" onclick="sortPoolStandings('groupA')">Group A <span id="sort-icon-groupA"></span></th>
+                                <th style="width: 140px; cursor:pointer;" onclick="sortPoolStandings('groupB')">Group B <span id="sort-icon-groupB"></span></th>
+                                <th style="width: 140px; cursor:pointer;" onclick="sortPoolStandings('groupC')">Group C <span id="sort-icon-groupC"></span></th>
+                                <th style="width: 140px; cursor:pointer;" onclick="sortPoolStandings('groupD')">Group D <span id="sort-icon-groupD"></span></th>
+                                <th style="width: 160px; cursor:pointer;" onclick="sortPoolStandings('wc1')">Wild Card 1 <span id="sort-icon-wc1"></span></th>
+                                <th style="width: 160px; cursor:pointer;" onclick="sortPoolStandings('wc2')">Wild Card 2 <span id="sort-icon-wc2"></span></th>
+                                <th style="width: 120px; cursor:pointer;" onclick="sortPoolStandings('total')">Total <span id="sort-icon-total"></span></th>
+                                <th style="width: 100px; cursor:pointer;" onclick="sortPoolStandings('tb')">TB <span id="sort-icon-tb"></span></th>
+                                <th style="width: 100px; cursor:pointer;" onclick="sortPoolStandings('payout')">Payout <span id="sort-icon-payout"></span></th>
                             </tr>
                         </thead>
                         <tbody id="leaderboardBody">
                         </tbody>
                     </table>
                 </div>
+                </div><!-- end pool-standings-content -->
             </div>
 
             <!-- ENTRY FORM TAB (dynamically rendered from shared golfer data) -->
@@ -932,32 +944,22 @@
                         </div>
 
                         <div class="stat-card">
-                            <h4 class="font-bold text-lg mb-4">Projected Tournament Payouts</h4>
-                            <p class="text-xs text-slate-400 mb-3">Set projected prize money by finishing position (1st–65th). Pre-populated with 2026 Valspar Championship purse ($9.1M). These are used on the Tournament tab until actual ESPN earnings are available.</p>
-                            <div class="flex items-center gap-2 mb-3">
-                                <button class="button-secondary text-xs px-3 py-1" onclick="resetProjectedPayoutsToDefaults()">Reset to Defaults</button>
-                                <span class="text-xs text-slate-500" id="projectedPayoutsTotal">Total: $0</span>
+                            <h4 class="font-bold text-lg mb-4">Tournament Purse & Projected Payouts</h4>
+                            <p class="text-xs text-slate-400 mb-3">Set the total tournament purse and projected payouts by finishing position (1st–65th). Enter a % of purse or a dollar amount. Used on the Tournament tab until actual ESPN earnings are available.</p>
+                            <div class="flex items-center gap-3 mb-4">
+                                <div>
+                                    <label class="text-xs text-slate-400 block mb-1">Total Purse ($)</label>
+                                    <input type="text" id="admin-total-purse" class="bg-green-900/20 border border-green-700/30 rounded px-3 py-2 text-sm" style="width:160px;" value="9,100,000" oninput="onPurseChange()">
+                                </div>
+                                <button class="button-secondary text-xs px-3 py-1 self-end" onclick="applyPursePercentages()">Apply % to All</button>
+                                <button class="button-secondary text-xs px-3 py-1 self-end" onclick="resetProjectedPayoutsToDefaults()">Reset to Defaults</button>
+                                <span class="text-xs text-slate-500 self-end" id="projectedPayoutsTotal">Total: $0</span>
                             </div>
                             <div id="admin-projected-payouts" class="space-y-1" style="max-height: 400px; overflow-y: auto; padding-right: 4px;">
                             </div>
                             <button class="button-primary w-full mt-4" onclick="saveProjectedPayouts()">Save Projected Payouts</button>
                         </div>
 
-                        <div class="stat-card">
-                            <h4 class="font-bold text-lg mb-4">Quick Actions</h4>
-                            <div class="space-y-2">
-                                <button class="button-primary w-full text-sm">Send Email to All</button>
-                                <button class="button-secondary w-full text-sm">Export Entries</button>
-                                <button class="button-secondary w-full text-sm">Sync Golf Scores</button>
-                                <button class="button-secondary w-full text-sm">Generate Payouts</button>
-                            </div>
-                            <div class="mt-6 pt-4 border-t border-green-900/30">
-                                <h4 class="font-bold text-sm mb-3">Past Tournaments</h4>
-                                <div id="archive-list" class="space-y-2 text-sm">
-                                    <p class="text-xs text-slate-500">Loading...</p>
-                                </div>
-                            </div>
-                        </div>
                     </div>
                 </div>
 
@@ -1011,6 +1013,7 @@
                     <h3 class="text-xl font-bold mb-4">Entry Management</h3>
                     <div class="flex flex-wrap items-center gap-3 mb-4">
                         <button class="button-secondary text-sm" onclick="loadAdminEntries()">Refresh Entries</button>
+                        <button class="button-secondary text-sm" onclick="exportEntriesToExcel()">Export to Excel</button>
                         <button class="text-sm px-3 py-1.5 rounded" style="background:rgba(22,163,74,0.2); color:#22c55e; border:1px solid rgba(22,163,74,0.4);" onclick="bulkToggleEditable(true)">Enable All Editing</button>
                         <button class="text-sm px-3 py-1.5 rounded" style="background:rgba(239,68,68,0.2); color:#ef4444; border:1px solid rgba(239,68,68,0.4);" onclick="bulkToggleEditable(false)">Disable All Editing</button>
                         <label class="flex items-center gap-2 text-sm text-slate-400 ml-2" title="When checked, editing stays available even after the submission deadline">
@@ -1049,8 +1052,9 @@
                 <div id="admin-accounts" class="admin-tab-pane hidden">
                     <h3 class="text-xl font-bold mb-4">Registered Accounts</h3>
                     <p class="text-slate-400 text-sm mb-6">All user accounts that have been created. Passwords are not stored in plain text and cannot be viewed.</p>
-                    <div class="mb-4">
+                    <div class="mb-4 flex flex-wrap items-center gap-3">
                         <button class="button-secondary text-sm" onclick="loadAdminUsers()">Refresh List</button>
+                        <button class="button-secondary text-sm" onclick="exportAccountsToExcel()">Export to Excel</button>
                         <span id="admin-users-count" class="text-sm text-slate-400 ml-4"></span>
                     </div>
                     <div class="leaderboard-scroll">
@@ -1105,7 +1109,7 @@
         <div style="max-width:440px;width:90%;background:linear-gradient(135deg,#0f172a,#1e3a1f);border:1px solid rgba(22,163,74,0.4);border-radius:12px;padding:32px;box-shadow:0 25px 50px rgba(0,0,0,0.5);">
             <div class="text-center mb-6">
                 <div class="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style="background:linear-gradient(135deg,#16a34a,#c4a35a);font-size:1.5rem;">&#9971;</div>
-                <h2 class="text-2xl font-bold" style="color:#c4a35a;">Golf Pool</h2>
+                <h2 class="text-2xl font-bold" style="color:#c4a35a;">Grand Slam Golf Pools</h2>
                 <p class="text-slate-400 text-sm mt-1">Enter the pool password to access the site</p>
             </div>
             <input type="password" id="pool-gate-password" class="w-full bg-green-900/20 border border-green-700/30 rounded px-4 py-3 text-sm mb-2" placeholder="Pool password" onkeydown="if(event.key==='Enter')verifyPoolPassword()" autofocus>
@@ -2037,7 +2041,7 @@
         // Payout structure from admin-configured percentages
         function getPayoutStructure(numEntries, entryFee) {
             const totalPool = numEntries * entryFee;
-            const pcts = poolSettings.payoutPcts || [30, 15, 10, 8, 7, 6, 5, 4, 3, 0];
+            const pcts = poolSettings.payoutPcts || [27.5, 21, 16, 12, 9, 6.5, 4.5, 3.5, 0, 0];
             const results = [];
             pcts.forEach((pct, i) => {
                 if (pct > 0) {
@@ -2083,6 +2087,18 @@
         async function loadAndRenderPoolLeaderboard() {
             const tbody = document.getElementById('leaderboardBody');
             if (!tbody) return;
+
+            // Hide pool standings before deadline (unless admin)
+            const lockedEl = document.getElementById('pool-standings-locked');
+            const contentEl = document.getElementById('pool-standings-content');
+            if (isBeforeDeadline() && !isAdminUser) {
+                if (lockedEl) lockedEl.style.display = 'block';
+                if (contentEl) contentEl.style.display = 'none';
+                return;
+            } else {
+                if (lockedEl) lockedEl.style.display = 'none';
+                if (contentEl) contentEl.style.display = '';
+            }
 
             tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:20px; color:#94a3b8;">Loading pool standings...</td></tr>';
 
@@ -2246,6 +2262,41 @@
             populateLeaderboard(filteredData);
         }
 
+        let poolSortColumn = 'rank';
+        let poolSortAsc = true;
+        function sortPoolStandings(column) {
+            if (poolSortColumn === column) {
+                poolSortAsc = !poolSortAsc;
+            } else {
+                poolSortColumn = column;
+                poolSortAsc = column === 'rank' || column === 'name' || column === 'tb';
+            }
+            // Clear all sort icons
+            ['rank','name','groupA','groupB','groupC','groupD','wc1','wc2','total','tb','payout'].forEach(c => {
+                const icon = document.getElementById('sort-icon-' + c);
+                if (icon) icon.textContent = c === column ? (poolSortAsc ? '▲' : '▼') : '';
+            });
+            const sorted = [...leaderboardData].sort((a, b) => {
+                let valA, valB;
+                switch (column) {
+                    case 'rank': valA = a.rank; valB = b.rank; break;
+                    case 'name': valA = (a.name || '').toLowerCase(); valB = (b.name || '').toLowerCase(); return poolSortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                    case 'groupA': valA = a.groupA?.amount || 0; valB = b.groupA?.amount || 0; break;
+                    case 'groupB': valA = a.groupB?.amount || 0; valB = b.groupB?.amount || 0; break;
+                    case 'groupC': valA = a.groupC?.amount || 0; valB = b.groupC?.amount || 0; break;
+                    case 'groupD': valA = a.groupD?.amount || 0; valB = b.groupD?.amount || 0; break;
+                    case 'wc1': valA = a.wc1?.amount || 0; valB = b.wc1?.amount || 0; break;
+                    case 'wc2': valA = a.wc2?.amount || 0; valB = b.wc2?.amount || 0; break;
+                    case 'total': valA = a.total || 0; valB = b.total || 0; break;
+                    case 'tb': valA = typeof a.tb === 'number' ? a.tb : 999; valB = typeof b.tb === 'number' ? b.tb : 999; break;
+                    case 'payout': valA = a.payout || 0; valB = b.payout || 0; break;
+                    default: valA = a.rank; valB = b.rank;
+                }
+                return poolSortAsc ? valA - valB : valB - valA;
+            });
+            populateLeaderboard(sorted);
+        }
+
         // Toggle Auto-refresh
         let poolAutoRefreshInterval = null;
         function toggleAutoRefresh() {
@@ -2289,7 +2340,26 @@
                     if (count === 0) subEl.textContent = 'Be the first to enter!';
                     else subEl.textContent = count + ' entries × $' + fee;
                 }
+                // Update payout distribution on home tab
+                renderHomePayoutDistribution(count, fee);
             } catch (e) { console.log('Failed to update home stats:', e); }
+        }
+
+        function renderHomePayoutDistribution(entryCount, entryFee) {
+            const container = document.getElementById('home-payout-distribution');
+            if (!container) return;
+            const pcts = poolSettings.payoutPcts || [27.5, 21, 16, 12, 9, 6.5, 4.5, 3.5];
+            const pool = (entryCount || 0) * (entryFee || 30);
+            const labels = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th'];
+            let html = '';
+            pcts.forEach((pct, i) => {
+                if (pct > 0) {
+                    const amt = Math.round(pool * (pct / 100));
+                    html += '<div class="flex justify-between"><span>' + labels[i] + ' (' + pct + '%)</span><span class="font-semibold" style="color:#c4a35a;">' + (pool > 0 ? '$' + amt.toLocaleString() : '—') + '</span></div>';
+                }
+            });
+            if (html === '') html = '<p class="text-slate-500">Payout distribution not yet configured.</p>';
+            container.innerHTML = html;
         }
 
         // =====================================================
@@ -2993,7 +3063,7 @@
         function renderAdminPayoutRows() {
             const container = document.getElementById('admin-payout-rows');
             if (!container) return;
-            const pcts = poolSettings.payoutPcts || [30, 15, 10, 8, 7, 6, 5, 4, 3, 0];
+            const pcts = poolSettings.payoutPcts || [27.5, 21, 16, 12, 9, 6.5, 4.5, 3.5, 0, 0];
             let html = '';
             for (let i = 0; i < 10; i++) {
                 const val = pcts[i] !== undefined ? pcts[i] : 0;
@@ -3067,18 +3137,72 @@
             const container = document.getElementById('admin-projected-payouts');
             if (!container) return;
             const payouts = poolSettings.projectedPayouts || DEFAULT_PROJECTED_PAYOUTS;
-            let html = '';
+            // Set purse field
+            const purseEl = document.getElementById('admin-total-purse');
+            if (purseEl && poolSettings.totalPurse) purseEl.value = poolSettings.totalPurse.toLocaleString();
+            let html = '<div class="flex items-center gap-2 mb-2"><span style="width:36px;" class="text-xs font-bold text-slate-400">Pos</span><span class="text-xs font-bold text-slate-400" style="width:60px;text-align:right;">%</span><span class="text-xs font-bold text-slate-400" style="width:110px;text-align:right;">Amount ($)</span></div>';
+            const purse = getAdminPurse();
             for (let i = 0; i < 65; i++) {
                 const val = payouts[i] !== undefined ? payouts[i] : 0;
+                const pct = purse > 0 ? (val / purse * 100).toFixed(2) : '';
                 html += `<div class="flex items-center gap-2">
                     <span class="text-xs font-semibold text-slate-400" style="width:36px;">${getOrdinal(i + 1)}</span>
+                    <input type="number" min="0" max="100" step="0.01" value="${pct}"
+                        id="admin-proj-pct-${i}" class="bg-green-900/20 border border-green-700/30 rounded px-2 py-1 text-xs text-right"
+                        style="width:60px;" oninput="onProjPctChange(${i})">
+                    <span class="text-xs text-slate-500">%</span>
                     <span class="text-xs text-slate-500">$</span>
                     <input type="number" min="0" step="100" value="${val}"
                         id="admin-proj-payout-${i}" class="flex-1 bg-green-900/20 border border-green-700/30 rounded px-2 py-1 text-xs text-right"
-                        style="max-width:110px;" oninput="updateProjectedPayoutsTotal()">
+                        style="max-width:110px;" oninput="onProjAmtChange(${i})">
                 </div>`;
             }
             container.innerHTML = html;
+            updateProjectedPayoutsTotal();
+        }
+
+        function getAdminPurse() {
+            const el = document.getElementById('admin-total-purse');
+            return el ? parseFloat(el.value.replace(/[^0-9.]/g, '')) || 0 : TOTAL_PURSE;
+        }
+
+        function onPurseChange() {
+            TOTAL_PURSE = getAdminPurse();
+            const purseDisplayEl = document.getElementById('purseDisplay');
+            if (purseDisplayEl) purseDisplayEl.textContent = 'Total Purse: $' + TOTAL_PURSE.toLocaleString();
+        }
+
+        function onProjPctChange(idx) {
+            const pctEl = document.getElementById('admin-proj-pct-' + idx);
+            const amtEl = document.getElementById('admin-proj-payout-' + idx);
+            if (!pctEl || !amtEl) return;
+            const purse = getAdminPurse();
+            const pct = parseFloat(pctEl.value) || 0;
+            amtEl.value = Math.round(purse * pct / 100);
+            updateProjectedPayoutsTotal();
+        }
+
+        function onProjAmtChange(idx) {
+            const pctEl = document.getElementById('admin-proj-pct-' + idx);
+            const amtEl = document.getElementById('admin-proj-payout-' + idx);
+            if (!pctEl || !amtEl) return;
+            const purse = getAdminPurse();
+            const amt = parseFloat(amtEl.value) || 0;
+            pctEl.value = purse > 0 ? (amt / purse * 100).toFixed(2) : 0;
+            updateProjectedPayoutsTotal();
+        }
+
+        function applyPursePercentages() {
+            const purse = getAdminPurse();
+            if (purse <= 0) { alert('Enter a valid total purse first.'); return; }
+            for (let i = 0; i < 65; i++) {
+                const pctEl = document.getElementById('admin-proj-pct-' + i);
+                const amtEl = document.getElementById('admin-proj-payout-' + i);
+                if (pctEl && amtEl) {
+                    const pct = parseFloat(pctEl.value) || 0;
+                    amtEl.value = Math.round(purse * pct / 100);
+                }
+            }
             updateProjectedPayoutsTotal();
         }
 
@@ -3111,7 +3235,9 @@
 
         async function saveProjectedPayouts() {
             const payouts = getAdminProjectedPayouts();
-            const settings = { ...poolSettings, projectedPayouts: payouts };
+            const purse = getAdminPurse();
+            TOTAL_PURSE = purse;
+            const settings = { ...poolSettings, projectedPayouts: payouts, totalPurse: purse };
             try {
                 const res = await fetch('/api/settings', {
                     method: 'POST',
@@ -3722,10 +3848,12 @@
                 const adminName = poolSettings.tournamentName || '';
                 const leaderboardContent = document.getElementById('tournament-leaderboard-content');
                 const notStartedMsg = document.getElementById('tournament-not-started');
+                const headerInfo = document.getElementById('tournament-header-info');
 
                 if (espnName && !tournamentNamesMatch(espnName, adminName)) {
-                    // ESPN is showing a different tournament — hide leaderboard
+                    // ESPN is showing a different tournament — hide leaderboard and header
                     if (leaderboardContent) leaderboardContent.style.display = 'none';
+                    if (headerInfo) headerInfo.style.display = 'none';
                     if (notStartedMsg) {
                         notStartedMsg.style.display = 'block';
                         notStartedMsg.innerHTML = '<div style="text-align:center; padding:60px 20px;">' +
@@ -3737,8 +3865,9 @@
                     return;
                 }
 
-                // Tournament matches or no ESPN data yet — show leaderboard
+                // Tournament matches or no ESPN data yet — show leaderboard and header
                 if (leaderboardContent) leaderboardContent.style.display = '';
+                if (headerInfo) headerInfo.style.display = '';
                 if (notStartedMsg) notStartedMsg.style.display = 'none';
 
                 drawTournamentRows(tournamentInfo, lastUpdated);
@@ -3891,7 +4020,7 @@
             entryFee: 30,
             poolPassword: 'golf2026',
             cheddarUpUrl: 'https://golf-pool-test.cheddarup.com',
-            payoutPcts: [30, 15, 10, 8, 7, 6, 5, 4, 3, 0], // 1st-10th, 0 = no payout
+            payoutPcts: [27.5, 21, 16, 12, 9, 6.5, 4.5, 3.5, 0, 0], // 1st-8th
             projectedPayouts: null, // Will be populated from settings or defaults
             editOverrideDeadline: false, // Admin override: allow editing after deadline
             selectedTournamentKey: 'valspar',
@@ -4210,6 +4339,50 @@
             }
         }
 
+        function exportToCSV(filename, headers, rows) {
+            const csvContent = [headers.join(','), ...rows.map(r => r.map(c => '"' + String(c || '').replace(/"/g, '""') + '"').join(','))].join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            link.click();
+            URL.revokeObjectURL(link.href);
+        }
+
+        async function exportEntriesToExcel() {
+            try {
+                const res = await fetch('/api/entries');
+                if (!res.ok) throw new Error('Failed');
+                const entries = await res.json();
+                if (entries.length === 0) { alert('No entries to export.'); return; }
+                const headers = ['#', 'Entry Name', 'Name', 'Email', 'Group A', 'Group B', 'Group C', 'Group D', 'WC1', 'WC2', 'Tiebreaker', 'Submitted', 'Payment Status'];
+                const rows = entries.map((e, i) => [
+                    i + 1, e.entryName || '', e.name || '', e.email || '',
+                    e.groupA || '', e.groupB || '', e.groupC || '', e.groupD || '',
+                    e.wildCard1 || '', e.wildCard2 || '',
+                    e.tiebreaker !== undefined && e.tiebreaker !== null ? e.tiebreaker : '',
+                    e.submittedAt ? new Date(e.submittedAt).toLocaleDateString() : '',
+                    e.paymentStatus === 'paid' ? 'Paid' : 'Not Paid'
+                ]);
+                exportToCSV('entries_export.csv', headers, rows);
+            } catch (e) { alert('Failed to export entries.'); }
+        }
+
+        async function exportAccountsToExcel() {
+            try {
+                const res = await fetch('/api/admin/users');
+                if (!res.ok) throw new Error('Failed');
+                const users = await res.json();
+                if (users.length === 0) { alert('No accounts to export.'); return; }
+                const headers = ['#', 'Name', 'Email', 'Registered'];
+                const rows = users.map((u, i) => [
+                    i + 1, u.name || '', u.email || '',
+                    u.createdAt ? new Date(u.createdAt).toLocaleDateString() : ''
+                ]);
+                exportToCSV('accounts_export.csv', headers, rows);
+            } catch (e) { alert('Failed to export accounts.'); }
+        }
+
         async function logoutUser() {
             if (authToken) {
                 fetch('/api/auth/logout', { method:'POST', headers:{'Authorization':'Bearer '+authToken} }).catch(()=>{});
@@ -4289,7 +4462,7 @@
                 const isPaid = entry.paymentStatus === 'paid';
                 const paymentBadge = isPaid
                     ? '<span class="text-xs px-2 py-1 rounded" style="background:rgba(22,163,74,0.15);border:1px solid rgba(22,163,74,0.3);color:#16a34a;">Paid</span>'
-                    : '<span class="text-xs px-2 py-1 rounded" style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:#f59e0b;">Not Paid</span>';
+                    : '<span class="text-xs px-2 py-1 rounded" style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:#f59e0b;">Payment Not Yet Confirmed</span>';
                 html += `
                 <div class="stat-card mb-4">
                     <div class="flex justify-between items-start mb-4">
@@ -4314,8 +4487,9 @@
                         <div><span class="text-slate-400 text-xs block">Wild Card 1 <span class="gold-badge">2x</span></span><span class="font-semibold">${entry.wildCard1 || '—'}</span></div>
                         <div><span class="text-slate-400 text-xs block">Wild Card 2 <span class="gold-badge">2x</span></span><span class="font-semibold">${entry.wildCard2 || '—'}</span></div>
                         <div><span class="text-slate-400 text-xs block">Tiebreaker</span><span class="font-semibold">${tb}</span></div>
-                        <div><span class="text-slate-400 text-xs block">Payment</span><span class="font-semibold" style="color:#c4a35a;">$${poolSettings.entryFee}</span></div>
+                        <div><span class="text-slate-400 text-xs block">Entry Fee</span><span class="font-semibold" style="color:#c4a35a;">$${poolSettings.entryFee}</span></div>
                     </div>
+                    ${!isPaid ? '<p class="text-xs text-slate-500 mt-3" style="border-top:1px solid rgba(100,116,139,0.2); padding-top:8px;">If you have already completed payment, please allow up to 24 hours for the pool commissioner to confirm your entry. If still not confirmed after 24 hours, please contact the pool commissioner.</p>' : ''}
                 </div>`;
             });
             container.innerHTML = html;
