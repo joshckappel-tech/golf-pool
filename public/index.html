@@ -3850,6 +3850,7 @@
             }
 
             const projectedPayouts = getAdminProjectedPayouts();
+            const purse = getAdminPurse();
             const settings = {
                 cheddarUpUrl: (document.getElementById('admin-leaguesafe-url') || {}).value || '',
                 submissionDeadline: (document.getElementById('admin-deadline') || {}).value ? new Date(document.getElementById('admin-deadline').value).toISOString() : poolSettings.submissionDeadline,
@@ -3858,6 +3859,7 @@
                 selectedTournamentKey: newTournamentKey,
                 payoutPcts: payoutPcts,
                 projectedPayouts: projectedPayouts,
+                totalPurse: purse,
                 poolStatus: (document.getElementById('admin-pool-status') || {}).value || 'entries_open',
             };
             const poolPw = (document.getElementById('admin-pool-pw') || {}).value;
@@ -4322,7 +4324,7 @@
             try {
                 const res = await fetch('/api/entries');
                 if (res.ok) {
-                    entriesCache = await res.json();
+                    entriesCache = (await res.json()).filter(e => e.entryStatus !== 'rejected');
                     // Keep existing selection
                     const prev = sel.value;
                     sel.innerHTML = '<option value="">— Select an entry —</option>';
@@ -4557,6 +4559,60 @@
         }
 
         // =====================================================
+        // SYNC SAVED SETTINGS TO ADMIN UI FIELDS
+        // =====================================================
+        function syncSettingsToUI() {
+            // Submission deadline
+            const deadlineEl = document.getElementById('admin-deadline');
+            if (deadlineEl && poolSettings.submissionDeadline) {
+                try {
+                    const d = new Date(poolSettings.submissionDeadline);
+                    // Format as YYYY-MM-DDTHH:MM for datetime-local input
+                    const pad = n => n.toString().padStart(2, '0');
+                    deadlineEl.value = d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+                } catch (e) {}
+            }
+
+            // Entry fee
+            const feeEl = document.getElementById('admin-entry-fee');
+            if (feeEl && poolSettings.entryFee) {
+                feeEl.value = '$' + parseFloat(poolSettings.entryFee).toFixed(2);
+            }
+
+            // Total purse
+            const purseEl = document.getElementById('admin-total-purse');
+            if (purseEl && poolSettings.totalPurse) {
+                purseEl.value = Number(poolSettings.totalPurse).toLocaleString();
+                TOTAL_PURSE = Number(poolSettings.totalPurse);
+            }
+
+            // Cheddar Up URL
+            const lsEl = document.getElementById('admin-leaguesafe-url');
+            if (lsEl && poolSettings.cheddarUpUrl) lsEl.value = poolSettings.cheddarUpUrl;
+
+            // Pool password
+            const pwEl = document.getElementById('admin-pool-pw');
+            if (pwEl && poolSettings.poolPassword) pwEl.value = poolSettings.poolPassword;
+
+            // Admin username
+            const adminUserEl = document.getElementById('admin-user-setting');
+            if (adminUserEl && poolSettings.adminUsername) adminUserEl.value = poolSettings.adminUsername;
+
+            // Pool status dropdown
+            const statusEl = document.getElementById('admin-pool-status');
+            if (statusEl && poolSettings.poolStatus) statusEl.value = poolSettings.poolStatus;
+
+            // Projected payouts — re-render the payout table
+            if (poolSettings.projectedPayouts || poolSettings.totalPurse) {
+                renderProjectedPayoutsAdmin();
+            }
+
+            // Update home page stats
+            if (typeof updateHomeStats === 'function') updateHomeStats();
+            if (typeof renderHomePayoutDistribution === 'function') renderHomePayoutDistribution();
+        }
+
+        // =====================================================
         // AUTH SYSTEM
         // =====================================================
         let currentUser = null;  // {id, email, name}
@@ -4600,7 +4656,12 @@
                     .catch(() => { authToken = null; localStorage.removeItem('gp_token'); updateAuthUI(); });
             }
             // Load pool settings
-            fetch('/api/settings').then(r => r.json()).then(s => { if (s.submissionDeadline) poolSettings = s; }).catch(() => {});
+            fetch('/api/settings').then(r => r.json()).then(s => {
+                if (s.submissionDeadline) {
+                    poolSettings = s;
+                    syncSettingsToUI();
+                }
+            }).catch(() => {});
         }
 
         // =====================================================
