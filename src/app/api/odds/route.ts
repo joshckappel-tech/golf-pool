@@ -1,14 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// Fetch live odds from The Odds API for a PGA Tour event
+// Fetch live odds from The Odds API for golf events
+// The Odds API uses separate sport keys per major championship:
+//   golf_masters_tournament_winner, golf_pga_championship_winner,
+//   golf_us_open_winner, golf_the_open_championship_winner
+// It does NOT cover regular PGA Tour weekly events.
+//
 // Usage:
-//   GET /api/odds?apiKey=xxx                          → list available events
-//   GET /api/odds?apiKey=xxx&eventId=abc123           → get odds for specific event
-//   GET /api/odds?apiKey=xxx&tournament=valspar        → match event by name
-// Also checks ODDS_API_KEY env var as fallback
+//   GET /api/odds?apiKey=xxx                     → try all golf keys, return first with events
+//   GET /api/odds?apiKey=xxx&tournament=masters   → match event by name
+//   GET /api/odds?mode=events&apiKey=xxx          → list available events only
 
 const ODDS_API_BASE = 'https://api.the-odds-api.com/v4/sports'
-const SPORT_KEY = 'golf_pga_tour'
+
+// All known golf sport keys on The Odds API
+const GOLF_SPORT_KEYS = [
+  'golf_masters_tournament_winner',
+  'golf_pga_championship_winner',
+  'golf_us_open_winner',
+  'golf_the_open_championship_winner',
+]
 
 async function getDb() {
   if (process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL) {
@@ -43,62 +54,69 @@ export async function GET(request: NextRequest) {
       }, { status: 200 })
     }
 
-    const mode = request.nextUrl.searchParams.get('mode') || '' // 'events' = list only
+    const mode = request.nextUrl.searchParams.get('mode') || ''
     const tournamentQuery = request.nextUrl.searchParams.get('tournament') || ''
-    const eventIdParam = request.nextUrl.searchParams.get('eventId') || ''
 
-    // Step 1: Get available PGA Tour events
-    const eventsUrl = `${ODDS_API_BASE}/${SPORT_KEY}/events?apiKey=${apiKey}`
-    const eventsRes = await fetch(eventsUrl, { cache: 'no-store' })
+    // Try each golf sport key to find events with odds
+    let allEvents: any[] = []
+    let targetSportKey = ''
+    let targetEvent: any = null
 
-    if (!eventsRes.ok) {
-      const errText = await eventsRes.text().catch(() => '')
-      console.error('Odds API events fetch failed:', eventsRes.status, errText)
-      return NextResponse.json({
-        error: 'Failed to fetch events from Odds API (status ' + eventsRes.status + ')',
-        source: 'error',
-        golfers: [],
-        events: [],
-      }, { status: 200 })
+    for (const sportKey of GOLF_SPORT_KEYS) {
+      try {
+        const eventsUrl = `${ODDS_API_BASE}/${sportKey}/events?apiKey=${apiKey}`
+        const eventsRes = await fetch(eventsUrl, { cache: 'no-store' })
+
+        if (eventsRes.ok) {
+          const events = await eventsRes.json()
+          if (Array.isArray(events) && events.length > 0) {
+            for (const evt of events) {
+              allEvents.push({ ...evt, _sportKey: sportKey })
+            }
+
+            // Check if any event matches the tournament query
+            if (tournamentQuery) {
+              const query = tournamentQuery.toLowerCase()
+              const match = events.find((e: any) =>
+                (e.description || '').toLowerCase().includes(query) ||
+                (e.home_team || '').toLowerCase().includes(query) ||
+                sportKey.toLowerCase().includes(query.replace(/\s+/g, '_'))
+              )
+              if (match && !targetEvent) {
+                targetEvent = match
+                targetSportKey = sportKey
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error(`Odds API fetch failed for ${sportKey}:`, e)
+      }
     }
 
-    const events = await eventsRes.json()
-
-    // Parse events into clean format
-    const parsedEvents = (Array.isArray(events) ? events : []).map((e: any) => ({
+    // Parse all events
+    const parsedEvents = allEvents.map((e: any) => ({
       id: e.id,
       name: e.description || e.home_team || 'Unknown',
       commence_time: e.commence_time,
-      home_team: e.home_team || '',
+      sportKey: e._sportKey,
     }))
 
-    // If mode=events, just return the event list (no odds fetch needed)
+    // If mode=events, just return the event list
     if (mode === 'events') {
       return NextResponse.json({
         events: parsedEvents,
         eventCount: parsedEvents.length,
         source: 'the_odds_api',
+        note: 'The Odds API only covers major championships (Masters, PGA Championship, US Open, The Open). For regular PGA Tour events, use the manual paste option.',
         fetchedAt: new Date().toISOString(),
       })
     }
 
-    // Step 2: Find the target event
-    let targetEvent: any = null
-
-    if (eventIdParam) {
-      targetEvent = events.find((e: any) => e.id === eventIdParam)
-    }
-
-    if (!targetEvent && tournamentQuery) {
-      const query = tournamentQuery.toLowerCase()
-      targetEvent = events.find((e: any) =>
-        (e.description || '').toLowerCase().includes(query) ||
-        (e.home_team || '').toLowerCase().includes(query)
-      )
-    }
-
-    if (!targetEvent && events.length > 0) {
-      targetEvent = events[0] // Default to first available event
+    // Pick best event if no match found
+    if (!targetEvent && allEvents.length > 0) {
+      targetEvent = allEvents[0]
+      targetSportKey = allEvents[0]._sportKey
     }
 
     if (!targetEvent) {
@@ -106,12 +124,12 @@ export async function GET(request: NextRequest) {
         golfers: [],
         events: parsedEvents,
         source: 'no_events',
-        message: 'No PGA Tour events currently available on Odds API',
+        message: 'No golf events currently available on The Odds API. Note: only major championships are covered (Masters, PGA Championship, US Open, The Open). For regular PGA Tour events like the Valspar, use the "Paste Odds" option on the admin page.',
       })
     }
 
-    // Step 3: Get odds for the event (outrights/futures market)
-    const oddsUrl = `${ODDS_API_BASE}/${SPORT_KEY}/events/${targetEvent.id}/odds?apiKey=${apiKey}&regions=us&markets=outrights&oddsFormat=american`
+    // Fetch odds for the target event
+    const oddsUrl = `${ODDS_API_BASE}/${targetSportKey}/events/${targetEvent.id}/odds?apiKey=${apiKey}&regions=us&markets=outrights&oddsFormat=american`
     const oddsRes = await fetch(oddsUrl, { cache: 'no-store' })
 
     if (!oddsRes.ok) {
@@ -122,7 +140,7 @@ export async function GET(request: NextRequest) {
         event: {
           id: targetEvent.id,
           name: targetEvent.description || targetEvent.home_team || 'Unknown',
-          commence_time: targetEvent.commence_time,
+          sportKey: targetSportKey,
         },
         source: 'error',
         error: 'Failed to fetch odds for event',
@@ -131,10 +149,10 @@ export async function GET(request: NextRequest) {
 
     const oddsData = await oddsRes.json()
 
-    // Parse odds from bookmakers — aggregate across all bookmakers for consensus
+    // Parse odds from bookmakers
     const golferOddsMap: { [name: string]: number[] } = {}
-
     const bookmakers = oddsData.bookmakers || []
+
     for (const bookmaker of bookmakers) {
       for (const market of bookmaker.markets || []) {
         if (market.key === 'outrights') {
@@ -148,7 +166,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Calculate consensus odds (average across bookmakers)
+    // Calculate consensus odds
     const golfers = Object.entries(golferOddsMap)
       .map(([name, odds]) => {
         const avgOdds = Math.round(odds.reduce((a, b) => a + b, 0) / odds.length)
@@ -165,6 +183,7 @@ export async function GET(request: NextRequest) {
       event: {
         id: targetEvent.id,
         name: targetEvent.description || targetEvent.home_team || 'Unknown',
+        sportKey: targetSportKey,
         commence_time: targetEvent.commence_time,
       },
       events: parsedEvents,
