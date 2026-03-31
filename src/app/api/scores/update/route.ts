@@ -64,146 +64,125 @@ async function batchResolve(items: any[], batchSize = 25): Promise<any[]> {
   return results;
 }
 
+// Helper: fetch a URL and return JSON, or null on failure
+async function fetchJson(url: string): Promise<any> {
+  try {
+    const r = await fetch(url, { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
+    if (r.ok) return await r.json();
+  } catch {}
+  return null;
+}
+
 /**
  * Fetch tournament data from ESPN Core API — works for specific completed tournaments.
  * The scoreboard endpoint ignores event IDs for golf, so this is the only way
  * to fetch data for a specific past tournament.
+ *
+ * Core API returns $ref links for most sub-resources (score, athlete, status,
+ * linescores, statistics). We batch-resolve these in parallel.
  */
 async function fetchFromCoreApi(eventId: string): Promise<any> {
   const result: any = { players: [], tournament: null, lastUpdated: new Date().toISOString() };
+  const COMP_BASE = `${CORE_API_BASE}/events/${eventId}/competitions/${eventId}`;
 
-  // 1. Fetch event metadata
+  // 1. Fetch event metadata + competition status in parallel
   console.log(`[ESPN Core] Fetching event ${eventId}...`);
-  const eventRes = await fetch(`${CORE_API_BASE}/events/${eventId}`, {
-    headers: { 'Accept': 'application/json' }, cache: 'no-store',
-  });
-  if (!eventRes.ok) {
-    console.log(`[ESPN Core] Event fetch failed: ${eventRes.status}`);
+  const [eventData, compStatusData] = await Promise.all([
+    fetchJson(`${CORE_API_BASE}/events/${eventId}`),
+    fetchJson(`${COMP_BASE}/status`),
+  ]);
+  if (!eventData) {
+    console.log(`[ESPN Core] Event fetch failed`);
     return null;
   }
-  const eventData = await eventRes.json();
-  console.log(`[ESPN Core] Event: ${eventData.name}, keys: ${Object.keys(eventData).join(',')}`);
+  console.log(`[ESPN Core] Event: ${eventData.name}`);
 
-  // 2. Fetch competition for status info
-  let compData: any = null;
-  try {
-    const compRes = await fetch(`${CORE_API_BASE}/events/${eventId}/competitions/${eventId}`, {
-      headers: { 'Accept': 'application/json' }, cache: 'no-store',
-    });
-    if (compRes.ok) {
-      compData = await compRes.json();
-      console.log(`[ESPN Core] Competition keys: ${Object.keys(compData).join(',')}`);
-    }
-  } catch (e) {
-    console.log(`[ESPN Core] Competition fetch failed:`, e);
-  }
-
-  // 3. Fetch all competitors (paginated, ~25 per page)
-  const allCompetitors: any[] = [];
+  // 2. Fetch ALL competitor items (paginated list — items have IDs + $ref links)
+  const allItems: any[] = [];
   let page = 1;
   const PAGE_SIZE = 50;
   while (true) {
-    const url = `${CORE_API_BASE}/events/${eventId}/competitions/${eventId}/competitors?limit=${PAGE_SIZE}&page=${page}`;
-    console.log(`[ESPN Core] Fetching competitors page ${page}...`);
-    try {
-      const res = await fetch(url, { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
-      if (!res.ok) {
-        console.log(`[ESPN Core] Competitors page ${page} failed: ${res.status}`);
-        break;
+    const data = await fetchJson(`${COMP_BASE}/competitors?limit=${PAGE_SIZE}&page=${page}`);
+    if (!data) break;
+    const items = data.items || [];
+    console.log(`[ESPN Core] Competitors page ${page}: ${items.length} items (total: ${data.count || '?'})`);
+    if (items.length === 0) break;
+    allItems.push(...items);
+    if (items.length < PAGE_SIZE) break;
+    page++;
+    if (page > 10) break;
+  }
+  console.log(`[ESPN Core] Total competitor items: ${allItems.length}`);
+  if (allItems.length === 0) return null;
+
+  // 3. For each competitor, batch-resolve score, athlete, status, and linescores in parallel
+  //    Each competitor item has: id, order, movement, amateur, and $ref links for:
+  //    score, athlete, status, linescores, statistics
+  console.log(`[ESPN Core] Resolving sub-resources for ${allItems.length} competitors...`);
+  const allCompetitors: any[] = [];
+  const BATCH = 15; // 15 competitors × 4 fetches = 60 parallel requests per batch
+
+  for (let i = 0; i < allItems.length; i += BATCH) {
+    const batch = allItems.slice(i, i + BATCH);
+    const batchResults = await Promise.all(batch.map(async (item) => {
+      const cid = item.id;
+      const compUrl = `${COMP_BASE}/competitors/${cid}`;
+
+      // Resolve score, athlete, status, and linescores list in parallel
+      const [scoreData, athleteData, statusData, linescoresListData] = await Promise.all([
+        item.score?.$ref ? fetchJson(item.score.$ref) : (typeof item.score === 'object' && item.score?.value !== undefined ? item.score : fetchJson(`${compUrl}/score`)),
+        item.athlete?.$ref ? fetchJson(item.athlete.$ref) : item.athlete,
+        item.status?.$ref ? fetchJson(item.status.$ref) : item.status,
+        fetchJson(`${compUrl}/linescores?limit=10`),
+      ]);
+
+      // Linescores list returns {items: [{$ref}, ...]} — resolve each round
+      let linescores: any[] = [];
+      if (linescoresListData?.items && linescoresListData.items.length > 0) {
+        // Check if items have inline data or are refs
+        const firstLs = linescoresListData.items[0];
+        if (firstLs.value !== undefined) {
+          // Inline data
+          linescores = linescoresListData.items;
+        } else if (firstLs.$ref) {
+          // Need to resolve each round
+          linescores = await Promise.all(
+            linescoresListData.items.map((ls: any) => ls.$ref ? fetchJson(ls.$ref) : ls)
+          );
+        }
       }
-      const data = await res.json();
-      const items = data.items || [];
-      console.log(`[ESPN Core] Page ${page}: ${items.length} items, total: ${data.count || '?'}`);
-      if (items.length === 0) break;
 
-      // Items might be $ref objects pointing to full competitor data
-      const resolved = await batchResolve(items, 25);
-      allCompetitors.push(...resolved);
-
-      if (items.length < PAGE_SIZE) break;
-      page++;
-      if (page > 10) break; // safety limit
-    } catch (e) {
-      console.log(`[ESPN Core] Competitors page ${page} error:`, e);
-      break;
-    }
+      return {
+        id: cid,
+        order: item.order,
+        movement: item.movement,
+        amateur: item.amateur,
+        score: scoreData,
+        athlete: athleteData,
+        status: statusData,
+        linescores: linescores.filter(Boolean),
+        earnings: item.earnings, // might exist on some endpoints
+      };
+    }));
+    allCompetitors.push(...batchResults);
+    console.log(`[ESPN Core] Resolved batch ${Math.floor(i / BATCH) + 1}/${Math.ceil(allItems.length / BATCH)}`);
   }
 
-  console.log(`[ESPN Core] Total competitors fetched: ${allCompetitors.length}`);
-  if (allCompetitors.length === 0) return null;
+  // Log sample resolved data
+  const s = allCompetitors[0];
+  console.log(`[ESPN Core] Sample resolved — name: ${s.athlete?.displayName}, score: ${JSON.stringify(s.score)?.substring(0, 80)}, linescores: ${s.linescores?.length}, status: ${JSON.stringify(s.status)?.substring(0, 80)}`);
 
-  // Log first competitor structure
-  const sample = allCompetitors[0];
-  console.log(`[ESPN Core] Sample competitor keys: ${Object.keys(sample).join(',')}`);
-  console.log(`[ESPN Core] Sample athlete type: ${typeof sample.athlete}, keys: ${sample.athlete ? Object.keys(sample.athlete).join(',') : 'null'}`);
-  console.log(`[ESPN Core] Sample score type: ${typeof sample.score}, value: ${JSON.stringify(sample.score)?.substring(0, 100)}`);
-  console.log(`[ESPN Core] Sample earnings: ${sample.earnings}`);
+  // 4. Parse tournament status
+  const statusType = compStatusData?.type || {};
+  const tournamentState = (statusType.state || '').toLowerCase();
+  const roundNumber = compStatusData?.period || 4;
+  const tournamentComplete = tournamentState === 'post' || statusType.completed === true;
 
-  // 4. Resolve athlete names — if athlete is a $ref, follow it
-  const needsAthleteResolution = allCompetitors.some(
-    c => c.athlete && !c.athlete.displayName && c.athlete.$ref
-  );
-  if (needsAthleteResolution) {
-    console.log(`[ESPN Core] Resolving athlete names for ${allCompetitors.length} competitors...`);
-    for (let i = 0; i < allCompetitors.length; i += 25) {
-      const batch = allCompetitors.slice(i, i + 25);
-      await Promise.all(batch.map(async (comp) => {
-        if (comp.athlete && !comp.athlete.displayName && comp.athlete.$ref) {
-          try {
-            const r = await fetch(comp.athlete.$ref, {
-              headers: { 'Accept': 'application/json' }, cache: 'no-store',
-            });
-            if (r.ok) comp.athlete = await r.json();
-          } catch {}
-        }
-      }));
-    }
-    console.log(`[ESPN Core] Athlete resolution complete`);
-  }
-
-  // 5. Resolve linescores if they are refs
-  const needsLinescoreResolution = allCompetitors.some(
-    c => Array.isArray(c.linescores) && c.linescores.length > 0 && c.linescores[0].$ref && c.linescores[0].value === undefined
-  );
-  if (needsLinescoreResolution) {
-    console.log(`[ESPN Core] Resolving linescores...`);
-    for (let i = 0; i < allCompetitors.length; i += 25) {
-      const batch = allCompetitors.slice(i, i + 25);
-      await Promise.all(batch.map(async (comp) => {
-        if (Array.isArray(comp.linescores)) {
-          comp.linescores = await Promise.all(comp.linescores.map(async (ls: any) => {
-            if (ls.$ref && ls.value === undefined) {
-              try {
-                const r = await fetch(ls.$ref, { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
-                if (r.ok) return await r.json();
-              } catch {}
-            }
-            return ls;
-          }));
-        }
-      }));
-    }
-    console.log(`[ESPN Core] Linescore resolution complete`);
-  }
-
-  // 6. Parse tournament metadata from event
-  const compStatus = compData?.status || {};
-  const eventStatus = eventData?.status || {};
-  // Status might be a ref
-  let statusObj = compStatus.type ? compStatus : eventStatus;
-  if (statusObj.$ref && !statusObj.type) {
-    statusObj = await resolveRef(statusObj);
-  }
-  const statusType = statusObj.type || statusObj;
-  const tournamentState = (statusType.state || statusType.name || '').toLowerCase();
-  const roundNumber = statusObj.period || 0;
-  const tournamentComplete = tournamentState === 'post' || tournamentState === 'completed';
-
-  let roundDisplay = statusType.description || statusType.detail || 'Unknown';
+  let roundDisplay = statusType.description || statusType.detail || 'Final';
   let roundState = 'unknown';
   if (tournamentComplete) {
     roundState = 'complete';
-    roundDisplay = roundNumber >= 4 ? 'Final' : `Round ${roundNumber} - Complete`;
+    roundDisplay = 'Final';
   } else if (tournamentState === 'in') {
     roundState = 'in_progress';
     roundDisplay = `Round ${roundNumber} - In Progress`;
@@ -212,22 +191,22 @@ async function fetchFromCoreApi(eventId: string): Promise<any> {
     roundDisplay = 'Not Started';
   }
 
-  // Course and venue info — may be refs
+  // 5. Parse tournament metadata (courses, venues — may be refs)
   let courseName: string | null = null;
   let yardage: number | null = null;
   let par: number | null = null;
 
-  const rawCourses = eventData.courses || compData?.courses || [];
+  const rawCourses = eventData.courses || [];
   if (rawCourses.length > 0) {
-    let courseData = await resolveRef(rawCourses[0]);
+    const courseData = await resolveRef(rawCourses[0]);
     courseName = courseData.name || courseData.shortName || null;
     yardage = courseData.yardage || courseData.yards || null;
     par = courseData.par || null;
   }
 
-  const rawVenues = eventData.venues || compData?.venues || [];
+  const rawVenues = eventData.venues || [];
   if (rawVenues.length > 0) {
-    let venueData = await resolveRef(rawVenues[0]);
+    const venueData = await resolveRef(rawVenues[0]);
     const city = venueData.address?.city;
     const state = venueData.address?.state;
     const loc = [city, state].filter(Boolean).join(', ');
@@ -240,9 +219,9 @@ async function fetchFromCoreApi(eventId: string): Promise<any> {
   }
 
   // Dates
+  let dates: string | null = null;
   const startDate = eventData.date || eventData.startDate;
   const endDate = eventData.endDate;
-  let dates: string | null = null;
   if (startDate) {
     const start = new Date(startDate);
     const end = endDate ? new Date(endDate) : null;
@@ -255,7 +234,7 @@ async function fetchFromCoreApi(eventId: string): Promise<any> {
 
   // Broadcasts — may be refs
   let network: string | null = null;
-  const rawBroadcasts = eventData.broadcasts || compData?.broadcasts || [];
+  const rawBroadcasts = eventData.broadcasts || [];
   if (rawBroadcasts.length > 0) {
     const broadcastNames: string[] = [];
     for (const b of rawBroadcasts.slice(0, 3)) {
@@ -266,10 +245,10 @@ async function fetchFromCoreApi(eventId: string): Promise<any> {
     if (broadcastNames.length > 0) network = broadcastNames.join(', ');
   }
 
-  // Defending champion — may be a ref
+  // Defending champion
   let defendingChampion: string | null = null;
   if (eventData.defendingChampion) {
-    let dc = await resolveRef(eventData.defendingChampion);
+    const dc = await resolveRef(eventData.defendingChampion);
     if (dc.athlete) {
       const ath = await resolveRef(dc.athlete);
       defendingChampion = ath.displayName || ath.fullName || null;
@@ -278,8 +257,7 @@ async function fetchFromCoreApi(eventId: string): Promise<any> {
     }
   }
 
-  // Purse
-  const purse = eventData.purse || eventData.displayPurse || compData?.purse || null;
+  const purse = eventData.purse || eventData.displayPurse || null;
 
   result.tournament = {
     name: eventData.name || eventData.shortName || 'Unknown',
@@ -297,50 +275,61 @@ async function fetchFromCoreApi(eventId: string): Promise<any> {
     defendingChampion,
   };
 
-  // 7. Parse each competitor into our standard format
+  // 6. Parse each competitor into our standard player format
   const parsed: any[] = [];
   for (const c of allCompetitors) {
     try {
       const athlete = c.athlete || {};
       const name = athlete.displayName || athlete.fullName || athlete.shortName || `Player ${c.id || '?'}`;
 
-      // Score — could be an object {value, displayValue} or a primitive
+      // Score — resolved score object has {value (total strokes), displayValue (to par)}
       let scoreToPar: number | null = null;
       let scoreDisplay = 'E';
-      if (c.score !== null && c.score !== undefined) {
-        if (typeof c.score === 'object') {
-          scoreToPar = parseScoreToPar(c.score.displayValue ?? c.score.value);
-          scoreDisplay = c.score.displayValue || String(c.score.value ?? 'E');
-        } else {
-          scoreToPar = parseScoreToPar(c.score);
-          scoreDisplay = String(c.score);
+      let totalStrokesFromScore: number | null = null;
+      if (c.score) {
+        if (c.score.displayValue !== undefined) {
+          scoreToPar = parseScoreToPar(c.score.displayValue);
+          scoreDisplay = String(c.score.displayValue);
+        } else if (c.score.value !== undefined) {
+          scoreToPar = parseScoreToPar(c.score.value);
+          scoreDisplay = String(c.score.value);
+        }
+        if (c.score.value !== undefined && typeof c.score.value === 'number') {
+          totalStrokesFromScore = c.score.value; // e.g. 259
         }
       }
 
-      // Player status
+      // Player status from resolved status object
       let playerStatus = 'active';
-      const statusName = (c.status?.type?.name || c.status?.type?.description || c.status?.name || '').toLowerCase();
-      if (statusName.includes('cut')) playerStatus = 'cut';
-      else if (statusName.includes('wd') || statusName.includes('withdraw')) playerStatus = 'withdrawn';
-      else if (statusName.includes('dq') || statusName.includes('disqualif')) playerStatus = 'disqualified';
+      const statusTypeName = (c.status?.type?.name || c.status?.type?.description || '').toLowerCase();
+      if (statusTypeName.includes('cut')) playerStatus = 'cut';
+      else if (statusTypeName.includes('wd') || statusTypeName.includes('withdraw')) playerStatus = 'withdrawn';
+      else if (statusTypeName.includes('dq') || statusTypeName.includes('disqualif')) playerStatus = 'disqualified';
 
-      // Also check score display
+      // Also check displayValue for CUT/WD/DQ
       const scoreStr = String(scoreDisplay).toLowerCase();
       if (scoreStr === 'cut') playerStatus = 'cut';
       else if (scoreStr === 'wd') playerStatus = 'withdrawn';
       else if (scoreStr === 'dq') playerStatus = 'disqualified';
 
-      if (playerStatus === 'active' && roundNumber >= 3) {
-        const ls = c.linescores || [];
-        if (ls.length === 2) playerStatus = 'cut';
+      // Cut detection: if tournament is complete and player has < 4 linescores
+      if (playerStatus === 'active' && tournamentComplete && c.linescores.length > 0 && c.linescores.length < 4) {
+        playerStatus = 'cut';
       }
 
-      // Round scores from linescores
-      const linescores = c.linescores || [];
-      const r1 = linescores[0]?.value !== undefined ? Number(linescores[0].value) : null;
-      const r2 = linescores[1]?.value !== undefined ? Number(linescores[1].value) : null;
-      const r3 = linescores[2]?.value !== undefined ? Number(linescores[2].value) : null;
-      const r4 = linescores[3]?.value !== undefined ? Number(linescores[3].value) : null;
+      // Round scores from resolved linescores
+      // Each linescore: {value: 65, displayValue: "-5", period: 1, ...}
+      const ls = c.linescores || [];
+      const r1 = ls[0]?.value !== undefined ? Number(ls[0].value) : null;
+      const r2 = ls[1]?.value !== undefined ? Number(ls[1].value) : null;
+      const r3 = ls[2]?.value !== undefined ? Number(ls[2].value) : null;
+      const r4 = ls[3]?.value !== undefined ? Number(ls[3].value) : null;
+
+      // Total strokes — from linescores sum or from score.value
+      const completedRounds = [r1, r2, r3, r4].filter(r => r !== null) as number[];
+      const totalStrokes = completedRounds.length > 0
+        ? completedRounds.reduce((a, b) => a + b, 0)
+        : totalStrokesFromScore;
 
       // Thru
       let thru = '--';
@@ -348,31 +337,21 @@ async function fetchFromCoreApi(eventId: string): Promise<any> {
         thru = '--';
       } else if (tournamentComplete) {
         thru = 'F';
-      } else if (tournamentState === 'in') {
-        const currentRoundIdx = roundNumber - 1;
-        if (currentRoundIdx >= 0 && currentRoundIdx < linescores.length) {
-          const holeScores = linescores[currentRoundIdx]?.linescores || [];
-          const holesPlayed = holeScores.length;
-          thru = holesPlayed >= 18 ? 'F' : holesPlayed > 0 ? holesPlayed.toString() : '--';
-        }
       }
 
-      // Today
+      // Today (last round score to par)
       let today: number | null = null;
-      if (playerStatus === 'active' && roundNumber > 0 && roundNumber <= linescores.length) {
-        today = parseScoreToPar(linescores[roundNumber - 1]?.displayValue);
+      if (playerStatus === 'active' && ls.length > 0) {
+        const lastRound = ls[ls.length - 1];
+        today = parseScoreToPar(lastRound?.displayValue);
       }
 
-      // Earnings
+      // Earnings — check competitor directly, then check score object
       let earnings: number | null = null;
       if (c.earnings !== undefined && c.earnings !== null) {
         earnings = typeof c.earnings === 'number' ? c.earnings : parseFloat(String(c.earnings).replace(/[$,]/g, ''));
         if (isNaN(earnings as number)) earnings = null;
       }
-
-      // Total strokes
-      const completedRounds = [r1, r2, r3, r4].filter(r => r !== null) as number[];
-      const totalStrokes = completedRounds.length > 0 ? completedRounds.reduce((a, b) => a + b, 0) : null;
 
       parsed.push({
         name,
@@ -392,7 +371,7 @@ async function fetchFromCoreApi(eventId: string): Promise<any> {
     }
   }
 
-  // Sort by score ascending
+  // Sort by score ascending (best first)
   parsed.sort((a, b) => {
     if (a._sortScore !== b._sortScore) return a._sortScore - b._sortScore;
     return (a.totalStrokes || 999) - (b.totalStrokes || 999);
@@ -425,7 +404,11 @@ async function fetchFromCoreApi(eventId: string): Promise<any> {
   }
 
   result.players = parsed.map(({ _sortScore, ...rest }) => rest);
-  console.log(`[ESPN Core] Parsed ${result.players.length} players. Top: ${result.players[0]?.name} (${result.players[0]?.score}), earnings: ${result.players[0]?.earnings}`);
+
+  const withEarnings = result.players.filter((p: any) => p.earnings > 0).length;
+  const withRounds = result.players.filter((p: any) => p.r1 !== null).length;
+  console.log(`[ESPN Core] Parsed ${result.players.length} players. ${withRounds} with round scores, ${withEarnings} with earnings.`);
+  console.log(`[ESPN Core] Top: ${result.players[0]?.name} pos=${result.players[0]?.pos} score=${result.players[0]?.score} R1=${result.players[0]?.r1} R2=${result.players[0]?.r2} R3=${result.players[0]?.r3} R4=${result.players[0]?.r4} total=${result.players[0]?.totalStrokes}`);
 
   return result;
 }
