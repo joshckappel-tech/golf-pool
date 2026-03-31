@@ -220,19 +220,54 @@ function parseEspnApiResponse(data: any): any {
 
         // === EARNINGS (available after tournament is complete) ===
         let earnings: number | null = null;
+
+        // Method 1: direct c.earnings
         if (c.earnings !== undefined && c.earnings !== null) {
-          earnings = typeof c.earnings === 'number' ? c.earnings : parseFloat(String(c.earnings));
+          earnings = typeof c.earnings === 'number' ? c.earnings : parseFloat(String(c.earnings).replace(/[$,]/g, ''));
           if (isNaN(earnings as number)) earnings = null;
         }
-        // Also check statistics array for earnings
+
+        // Method 2: c.prize or c.purse or c.money
+        if (earnings === null) {
+          const prizeVal = c.prize ?? c.purse ?? c.money ?? c.prizeMoney;
+          if (prizeVal !== undefined && prizeVal !== null) {
+            earnings = typeof prizeVal === 'number' ? prizeVal : parseFloat(String(prizeVal).replace(/[$,]/g, ''));
+            if (isNaN(earnings as number)) earnings = null;
+          }
+        }
+
+        // Method 3: statistics array
         if (earnings === null && Array.isArray(c.statistics)) {
           for (const stat of c.statistics) {
-            if (stat.name === 'earnings' || stat.abbreviation === 'EARN') {
+            if (stat.name === 'earnings' || stat.name === 'prize' || stat.name === 'money'
+                || stat.abbreviation === 'EARN' || stat.abbreviation === 'MONEY') {
               earnings = parseFloat(String(stat.displayValue || stat.value || '0').replace(/[$,]/g, ''));
               if (isNaN(earnings as number)) earnings = null;
               break;
             }
           }
+        }
+
+        // Method 4: status.prize
+        if (earnings === null && c.status?.prize) {
+          earnings = typeof c.status.prize === 'number' ? c.status.prize : parseFloat(String(c.status.prize).replace(/[$,]/g, ''));
+          if (isNaN(earnings as number)) earnings = null;
+        }
+
+        // Log first 3 competitors' earnings-related fields for debugging
+        if (parsed.length < 3) {
+          console.log('[ESPN] Competitor earnings debug:', name, JSON.stringify({
+            earnings: c.earnings,
+            prize: c.prize,
+            purse: c.purse,
+            money: c.money,
+            prizeMoney: c.prizeMoney,
+            statusPrize: c.status?.prize,
+            statisticsCount: c.statistics?.length || 0,
+            statisticsNames: (c.statistics || []).map((s: any) => s.name).join(','),
+            resolvedEarnings: earnings,
+            allTopKeys: Object.keys(c).filter((k: string) => !['athlete','linescores','statistics','uid','id','$ref','status','score'].includes(k)),
+          }));
         }
 
         parsed.push({
@@ -309,9 +344,40 @@ function parseEspnApiResponse(data: any): any {
   return result;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const response = await fetch(ESPN_API_URL, {
+    // Check for eventId from query parameter or settings
+    const url = new URL(request.url);
+    let eventId = url.searchParams.get('eventId') || null;
+
+    // If no eventId in query, try loading from settings
+    if (!eventId) {
+      try {
+        const settingsPath = IS_VERCEL ? '/tmp/golf-pool-data/settings.json' : path.join(process.cwd(), 'data', 'settings.json');
+        if (fsSync.existsSync(settingsPath)) {
+          const settings = JSON.parse(fsSync.readFileSync(settingsPath, 'utf-8'));
+          eventId = settings.espnEventId || null;
+        }
+      } catch (e) {
+        // Also try KV if available
+        try {
+          if (process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL) {
+            const db = await import('@/lib/db-kv');
+            const settings = await db.getSettings();
+            eventId = (settings as any).espnEventId || null;
+          }
+        } catch (e2) {}
+      }
+    }
+
+    // Build ESPN URL — use event-specific scoreboard if we have an event ID
+    const espnUrl = eventId
+      ? `${ESPN_API_URL}?event=${eventId}`
+      : ESPN_API_URL;
+
+    console.log(`[ESPN] Fetching: ${espnUrl}${eventId ? ' (event ID: ' + eventId + ')' : ' (default/current)'}`);
+
+    const response = await fetch(espnUrl, {
       headers: { 'Accept': 'application/json' },
       cache: 'no-store',
     });
@@ -324,37 +390,145 @@ export async function GET() {
     const apiData = await response.json();
     const scores = parseEspnApiResponse(apiData);
 
-    // If no course name resolved, try the ESPN event summary endpoint
-    if (scores.tournament && !scores.tournament.courseName) {
+    // Save the detected event ID for future use
+    const detectedEventId = apiData?.events?.[0]?.id;
+    if (detectedEventId && scores.tournament) {
+      scores.tournament.eventId = detectedEventId;
+    }
+
+    // Always try the ESPN event summary endpoint for rich tournament metadata
+    if (scores.tournament) {
       try {
-        const eventId = apiData?.events?.[0]?.id;
-        if (eventId) {
+        const summaryEventId = eventId || detectedEventId;
+        if (summaryEventId) {
           const summaryRes = await fetch(
-            `https://site.api.espn.com/apis/site/v2/sports/golf/pga/summary?event=${eventId}`,
+            `https://site.api.espn.com/apis/site/v2/sports/golf/pga/summary?event=${summaryEventId}`,
             { headers: { 'Accept': 'application/json' }, cache: 'no-store' }
           );
           if (summaryRes.ok) {
             const summary = await summaryRes.json();
-            const courses = summary.courses || summary.event?.courses || [];
-            const venue = summary.event?.venue || summary.venue;
-            if (courses.length > 0) {
-              const c = courses[0];
-              const cName = c.name || c.courseName;
-              const city = c.address?.city || venue?.address?.city;
-              const state = c.address?.state || venue?.address?.state;
-              const loc = [city, state].filter(Boolean).join(', ');
-              scores.tournament.courseName = cName ? (loc ? `${cName} — ${loc}` : cName) : null;
-            } else if (venue) {
-              const vName = venue.fullName || venue.shortName;
-              const city = venue.address?.city;
-              const state = venue.address?.state;
-              const loc = [city, state].filter(Boolean).join(', ');
-              scores.tournament.courseName = vName ? (loc ? `${vName} — ${loc}` : vName) : null;
+
+            // Log full structure keys for debugging
+            console.log('[ESPN] Summary top-level keys:', Object.keys(summary));
+            console.log('[ESPN] Summary event keys:', summary.event ? Object.keys(summary.event) : 'no event');
+
+            const ev = summary.event || {};
+            const courses = summary.courses || ev.courses || [];
+            const venue = ev.venue || summary.venue;
+
+            // Course name + location
+            if (!scores.tournament.courseName) {
+              if (courses.length > 0) {
+                const c = courses[0];
+                const cName = c.name || c.courseName;
+                const city = c.address?.city || venue?.address?.city;
+                const state = c.address?.state || venue?.address?.state;
+                const loc = [city, state].filter(Boolean).join(', ');
+                scores.tournament.courseName = cName ? (loc ? `${cName} — ${loc}` : cName) : null;
+              } else if (venue) {
+                const vName = venue.fullName || venue.shortName;
+                const city = venue.address?.city;
+                const state = venue.address?.state;
+                const loc = [city, state].filter(Boolean).join(', ');
+                scores.tournament.courseName = vName ? (loc ? `${vName} — ${loc}` : vName) : null;
+              }
             }
-            console.log('[ESPN] Summary venue debug:', JSON.stringify({
-              coursesCount: courses.length,
-              venue: venue ? Object.keys(venue) : null,
-              resolved: scores.tournament.courseName,
+
+            // Yardage + Par from courses
+            if (courses.length > 0) {
+              scores.tournament.yardage = courses[0].yardage || courses[0].yards || null;
+              scores.tournament.par = courses[0].par || null;
+            }
+
+            // Tournament dates
+            const startDate = ev.date || ev.startDate;
+            const endDate = ev.endDate;
+            if (startDate) {
+              const start = new Date(startDate);
+              const end = endDate ? new Date(endDate) : null;
+              const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+              const yearOpts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+              if (end) {
+                scores.tournament.dates = `${start.toLocaleDateString('en-US', opts)} – ${end.toLocaleDateString('en-US', yearOpts)}`;
+              } else {
+                scores.tournament.dates = start.toLocaleDateString('en-US', yearOpts);
+              }
+            }
+
+            // Broadcast / TV info
+            const broadcasts = ev.broadcasts || competition?.broadcasts || [];
+            if (broadcasts.length > 0) {
+              const networks = broadcasts.flatMap((b: any) => b.names || (b.media?.shortName ? [b.media.shortName] : []));
+              if (networks.length > 0) scores.tournament.network = networks.join(', ');
+            }
+
+            // Defending champion
+            const dChamp = ev.defendingChampion || ev.previousChampion;
+            if (dChamp) {
+              scores.tournament.defendingChampion = dChamp.athlete?.displayName || dChamp.displayName || dChamp.name || null;
+            }
+
+            // Location from venue if courseName still missing
+            if (!scores.tournament.courseName && venue?.fullName) {
+              scores.tournament.courseName = venue.fullName;
+            }
+
+            // Try to extract earnings from summary competitors if not already resolved
+            const hasEarnings = scores.players.some((p: any) => p.earnings != null && p.earnings > 0);
+            if (!hasEarnings) {
+              // Summary endpoint may have leaderboard with earnings
+              const summaryComps = summary.competitions?.[0]?.competitors
+                || summary.event?.competitions?.[0]?.competitors
+                || summary.leaderboard || [];
+
+              if (summaryComps.length > 0) {
+                // Log first competitor structure
+                const sc = summaryComps[0];
+                console.log('[ESPN] Summary competitor keys:', Object.keys(sc));
+                if (sc.athlete) console.log('[ESPN] Summary competitor.athlete keys:', Object.keys(sc.athlete));
+
+                const earningsMap: Record<string, number> = {};
+                for (const sc of summaryComps) {
+                  const scName = sc.athlete?.displayName || sc.displayName || sc.name;
+                  const scEarnings = sc.earnings ?? sc.prize ?? sc.purse ?? sc.money ?? sc.prizeMoney ?? sc.status?.prize;
+                  if (scName && scEarnings != null) {
+                    const val = typeof scEarnings === 'number' ? scEarnings : parseFloat(String(scEarnings).replace(/[$,]/g, ''));
+                    if (!isNaN(val) && val > 0) earningsMap[scName] = val;
+                  }
+                  // Also check statistics
+                  if (scName && !earningsMap[scName] && Array.isArray(sc.statistics)) {
+                    for (const stat of sc.statistics) {
+                      if (stat.name === 'earnings' || stat.name === 'prize' || stat.abbreviation === 'EARN' || stat.abbreviation === 'MONEY') {
+                        const val = parseFloat(String(stat.displayValue || stat.value || '0').replace(/[$,]/g, ''));
+                        if (!isNaN(val) && val > 0) { earningsMap[scName] = val; break; }
+                      }
+                    }
+                  }
+                }
+
+                // Apply earnings to parsed players
+                if (Object.keys(earningsMap).length > 0) {
+                  console.log('[ESPN] Found earnings from summary for', Object.keys(earningsMap).length, 'players. Sample:', Object.entries(earningsMap).slice(0, 3));
+                  scores.players.forEach((p: any) => {
+                    if (earningsMap[p.name]) p.earnings = earningsMap[p.name];
+                    // Try case-insensitive match
+                    else {
+                      const match = Object.entries(earningsMap).find(([k]) => k.toLowerCase() === p.name.toLowerCase());
+                      if (match) p.earnings = match[1];
+                    }
+                  });
+                }
+              }
+            }
+
+            console.log('[ESPN] Summary resolved:', JSON.stringify({
+              courseName: scores.tournament.courseName,
+              dates: scores.tournament.dates,
+              yardage: scores.tournament.yardage,
+              par: scores.tournament.par,
+              network: scores.tournament.network,
+              defendingChampion: scores.tournament.defendingChampion,
+              playersWithEarnings: scores.players.filter((p: any) => p.earnings > 0).length,
             }));
           }
         }
