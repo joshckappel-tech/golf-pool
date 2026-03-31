@@ -2591,7 +2591,7 @@
             // If that fails, try cached /api/scores
             // If both fail, we still have the hardcoded tournamentScores
             try {
-                const res = await fetch('/api/scores/update');
+                const res = await fetch('/api/scores/update?t=' + Date.now());
                 if (res.ok) {
                     const data = await res.json();
                     return processScoresData(data);
@@ -4112,18 +4112,45 @@
 
         // Save admin settings to API
         async function detectEspnEventId() {
+            const input = document.getElementById('admin-espn-event-id');
+            const currentValue = (input.value || '').trim();
+
+            // If user already typed an event ID, validate it instead of overwriting
+            if (currentValue && /^\d{6,}$/.test(currentValue)) {
+                const btn = event.target;
+                btn.textContent = 'Validating...';
+                btn.disabled = true;
+                try {
+                    const res = await fetch('https://sports.core.api.espn.com/v2/sports/golf/leagues/pga/events/' + currentValue);
+                    if (res.ok) {
+                        const data = await res.json();
+                        const name = data.name || 'Unknown Tournament';
+                        alert('Valid Event ID: ' + currentValue + '\n\nTournament: ' + name + '\n\nClick "Save Changes" to lock your pool to this tournament.');
+                    } else {
+                        alert('Event ID ' + currentValue + ' was not found on ESPN (status ' + res.status + '). Please check the ID.');
+                    }
+                } catch (e) {
+                    alert('Error validating event ID: ' + e.message);
+                }
+                btn.textContent = 'Detect';
+                btn.disabled = false;
+                return;
+            }
+
+            // No value entered — detect current live tournament
             const btn = event.target;
             btn.textContent = 'Detecting...';
             btn.disabled = true;
             try {
-                const res = await fetch('/api/scores/update');
+                const res = await fetch('https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard');
                 if (res.ok) {
                     const data = await res.json();
-                    const eventId = data?.tournament?.eventId;
+                    const ev = data?.events?.[0];
+                    const eventId = ev?.id;
                     if (eventId) {
-                        document.getElementById('admin-espn-event-id').value = eventId;
-                        const name = data?.tournament?.name || 'tournament';
-                        alert('Detected Event ID: ' + eventId + ' (' + name + ')\n\nClick "Save Changes" to lock your pool to this tournament.');
+                        input.value = eventId;
+                        const name = ev?.name || 'tournament';
+                        alert('Detected current live tournament:\n\n' + name + ' (ID: ' + eventId + ')\n\nClick "Save Changes" to lock your pool to this tournament.');
                     } else {
                         alert('Could not detect event ID from ESPN. The API may not be returning event data right now.');
                     }
@@ -4207,6 +4234,7 @@
                     body: JSON.stringify(settings)
                 });
                 if (res.ok) {
+                    const oldEventId = poolSettings.espnEventId || '';
                     poolSettings = {...poolSettings, ...settings};
                     poolSettings._savedTournamentKey = newTournamentKey;
                     poolSettings._savedTournamentName = poolSettings.tournamentName;
@@ -4214,6 +4242,17 @@
                     onEntryFeeChange();
                     updateHomeStats();
                     alert('Settings saved!');
+                    // If ESPN Event ID changed, re-fetch scores from the new tournament
+                    const newEventId = settings.espnEventId || '';
+                    if (newEventId !== oldEventId) {
+                        console.log('[Admin] ESPN Event ID changed from', oldEventId, 'to', newEventId, '— refreshing scores...');
+                        try {
+                            await loadLiveScores();
+                            await loadAndRenderPoolLeaderboard();
+                        } catch (e) {
+                            console.log('[Admin] Score refresh after event ID change failed:', e);
+                        }
+                    }
                 }
             } catch (e) { alert('Failed to save settings.'); }
         }
