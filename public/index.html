@@ -973,10 +973,43 @@
 
                     <div class="flex flex-wrap gap-4 items-end">
                         <input type="text" id="searchInput" class="search-input flex-1" placeholder="Search by entrant name..." onkeyup="filterLeaderboard()" style="min-width:200px;">
+                        <button type="button" onclick="clearAllGolferFilters()" class="px-3 py-2 rounded text-xs font-semibold" style="background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.3); color:#f87171; display:none;" id="clearFiltersBtn">Clear Filters</button>
+                    </div>
+                    <div class="flex flex-wrap gap-3 mt-2" id="groupFilterRow">
                         <div>
-                            <label class="text-xs text-slate-500">Filter by golfer:</label>
-                            <select id="poolGolferFilter" onchange="filterLeaderboard()" class="px-3 py-2 rounded text-sm" style="background:#1e293b; border:1px solid rgba(22,163,74,0.3); color:#e2e8f0;">
-                                <option value="">All golfers</option>
+                            <label class="text-xs text-slate-500">Group A:</label>
+                            <select id="filterGroupA" onchange="filterLeaderboard()" class="px-2 py-1 rounded text-xs" style="background:#1e293b; border:1px solid rgba(22,163,74,0.3); color:#e2e8f0;">
+                                <option value="">All</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-500">Group B:</label>
+                            <select id="filterGroupB" onchange="filterLeaderboard()" class="px-2 py-1 rounded text-xs" style="background:#1e293b; border:1px solid rgba(22,163,74,0.3); color:#e2e8f0;">
+                                <option value="">All</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-500">Group C:</label>
+                            <select id="filterGroupC" onchange="filterLeaderboard()" class="px-2 py-1 rounded text-xs" style="background:#1e293b; border:1px solid rgba(22,163,74,0.3); color:#e2e8f0;">
+                                <option value="">All</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-500">Group D:</label>
+                            <select id="filterGroupD" onchange="filterLeaderboard()" class="px-2 py-1 rounded text-xs" style="background:#1e293b; border:1px solid rgba(22,163,74,0.3); color:#e2e8f0;">
+                                <option value="">All</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-500">WC 1:</label>
+                            <select id="filterWC1" onchange="filterLeaderboard()" class="px-2 py-1 rounded text-xs" style="background:#1e293b; border:1px solid rgba(22,163,74,0.3); color:#e2e8f0;">
+                                <option value="">All</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-500">WC 2:</label>
+                            <select id="filterWC2" onchange="filterLeaderboard()" class="px-2 py-1 rounded text-xs" style="background:#1e293b; border:1px solid rgba(22,163,74,0.3); color:#e2e8f0;">
+                                <option value="">All</option>
                             </select>
                         </div>
                     </div>
@@ -2805,20 +2838,30 @@
                 statusEl.className = 'status-badge ' + (liveScoresReady ? 'status-in-progress' : 'status-setup');
             }
 
-            // Populate golfer filter dropdown
-            const gFilter = document.getElementById('poolGolferFilter');
-            if (gFilter) {
+            // Populate per-group golfer filter dropdowns
+            const groupFields = [
+                { id: 'filterGroupA', key: 'groupA' },
+                { id: 'filterGroupB', key: 'groupB' },
+                { id: 'filterGroupC', key: 'groupC' },
+                { id: 'filterGroupD', key: 'groupD' },
+                { id: 'filterWC1', key: 'wc1' },
+                { id: 'filterWC2', key: 'wc2' },
+            ];
+            groupFields.forEach(gf => {
+                const sel = document.getElementById(gf.id);
+                if (!sel) return;
                 const golferSet = new Set();
                 standings.forEach(s => {
-                    [s.groupA?.golfer, s.groupB?.golfer, s.groupC?.golfer, s.groupD?.golfer, s.wc1?.golfer, s.wc2?.golfer].forEach(g => { if (g) golferSet.add(g); });
+                    const g = s[gf.key]?.golfer;
+                    if (g) golferSet.add(g);
                 });
-                const currentVal = gFilter.value;
-                gFilter.innerHTML = '<option value="">All golfers</option>';
+                const currentVal = sel.value;
+                sel.innerHTML = '<option value="">All</option>';
                 [...golferSet].sort().forEach(g => {
-                    gFilter.innerHTML += '<option value="' + g + '">' + g + '</option>';
+                    sel.innerHTML += '<option value="' + g + '">' + g + '</option>';
                 });
-                if (currentVal) gFilter.value = currentVal;
-            }
+                if (currentVal) sel.value = currentVal;
+            });
 
             populateLeaderboard(standings);
         }
@@ -2891,20 +2934,40 @@
         // Filter Leaderboard
         function filterLeaderboard() {
             const searchInput = document.getElementById('searchInput').value.toLowerCase();
-            const golferFilter = (document.getElementById('poolGolferFilter')?.value || '').toLowerCase();
+            const fA = (document.getElementById('filterGroupA')?.value || '').toLowerCase();
+            const fB = (document.getElementById('filterGroupB')?.value || '').toLowerCase();
+            const fC = (document.getElementById('filterGroupC')?.value || '').toLowerCase();
+            const fD = (document.getElementById('filterGroupD')?.value || '').toLowerCase();
+            const fW1 = (document.getElementById('filterWC1')?.value || '').toLowerCase();
+            const fW2 = (document.getElementById('filterWC2')?.value || '').toLowerCase();
+            const hasAnyFilter = fA || fB || fC || fD || fW1 || fW2;
+
+            // Show/hide clear button
+            const clearBtn = document.getElementById('clearFiltersBtn');
+            if (clearBtn) clearBtn.style.display = (hasAnyFilter || searchInput) ? '' : 'none';
+
             const filteredData = leaderboardData.filter(entry => {
                 if (searchInput && !(entry.name || '').toLowerCase().includes(searchInput)) return false;
-                if (golferFilter) {
-                    const picks = [
-                        entry.groupA?.golfer, entry.groupB?.golfer,
-                        entry.groupC?.golfer, entry.groupD?.golfer,
-                        entry.wc1?.golfer, entry.wc2?.golfer
-                    ].map(g => (g || '').toLowerCase());
-                    if (!picks.includes(golferFilter)) return false;
-                }
+                if (fA && (entry.groupA?.golfer || '').toLowerCase() !== fA) return false;
+                if (fB && (entry.groupB?.golfer || '').toLowerCase() !== fB) return false;
+                if (fC && (entry.groupC?.golfer || '').toLowerCase() !== fC) return false;
+                if (fD && (entry.groupD?.golfer || '').toLowerCase() !== fD) return false;
+                if (fW1 && (entry.wc1?.golfer || '').toLowerCase() !== fW1) return false;
+                if (fW2 && (entry.wc2?.golfer || '').toLowerCase() !== fW2) return false;
                 return true;
             });
             populateLeaderboard(filteredData);
+        }
+
+        function clearAllGolferFilters() {
+            document.getElementById('searchInput').value = '';
+            ['filterGroupA','filterGroupB','filterGroupC','filterGroupD','filterWC1','filterWC2'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.value = '';
+            });
+            const clearBtn = document.getElementById('clearFiltersBtn');
+            if (clearBtn) clearBtn.style.display = 'none';
+            filterLeaderboard();
         }
 
         let poolSortColumn = 'rank';
