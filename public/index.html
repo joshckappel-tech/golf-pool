@@ -785,10 +785,10 @@
                         <button class="tab-button active" onclick="switchTab('home')">Home</button>
                         <button class="tab-button" onclick="switchTab('tournament')">Tournament</button>
                         <button class="tab-button" onclick="switchTab('leaderboard')">Pool Standings</button>
+                        <button class="tab-button" onclick="switchTab('analytics')">Analytics</button>
                         <button class="tab-button" onclick="switchTab('entry')">Entry Form</button>
                         <button class="tab-button hidden" id="my-entries-tab" onclick="switchTab('myentries')">My Entries</button>
                         <button class="tab-button" onclick="switchTab('scenario')">Scenarios</button>
-                        <button class="tab-button" onclick="switchTab('analytics')">Analytics</button>
                         <button class="tab-button hidden" id="admin-tab-btn" onclick="switchTab('admin')">Admin</button>
                     </div>
                 </div>
@@ -880,7 +880,7 @@
                     <div id="tournament-header-info" class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
                         <div>
                             <h2 id="tournamentNameDisplay" class="text-2xl sm:text-3xl font-bold mb-2">2026 Valspar Championship</h2>
-                            <p class="text-slate-400" id="tournamentCourseDisplay">Copperhead Course at Innisbrook Resort</p>
+                            <p class="text-slate-400" id="tournamentCourseDisplay">Loading course info...</p>
                         </div>
                         <div class="text-right">
                             <span id="tournament-round-status" class="status-badge status-in-progress">Round 3 - Complete</span>
@@ -2501,8 +2501,18 @@
                 liveScoresReady = true;
             }
 
-            // Recalculate projected prizes every time scores update
-            livePrizeMap = calculateProjectedPrizes(tournamentScores);
+            // Use actual earnings from ESPN if available, otherwise projected prizes
+            const hasActualEarnings = tournamentScores.some(s => s.earnings != null && s.earnings > 0);
+            if (hasActualEarnings) {
+                livePrizeMap = {};
+                tournamentScores.forEach(s => {
+                    if (s.earnings != null && s.earnings > 0) {
+                        livePrizeMap[s.name] = s.earnings;
+                    }
+                });
+            } else {
+                livePrizeMap = calculateProjectedPrizes(tournamentScores);
+            }
 
             // Update tournament header from live data
             const t = data?.tournament;
@@ -2539,7 +2549,13 @@
 
         async function loadLiveScores() {
             // Always calculate from whatever data we have first (hardcoded fallback)
-            livePrizeMap = calculateProjectedPrizes(tournamentScores);
+            const hasEarnings = tournamentScores.some(s => s.earnings != null && s.earnings > 0);
+            if (hasEarnings) {
+                livePrizeMap = {};
+                tournamentScores.forEach(s => { if (s.earnings != null && s.earnings > 0) livePrizeMap[s.name] = s.earnings; });
+            } else {
+                livePrizeMap = calculateProjectedPrizes(tournamentScores);
+            }
 
             // Try fetching live data from ESPN via /api/scores/update
             // If that fails, try cached /api/scores
@@ -3017,6 +3033,10 @@
             const groupColors = { 'A': '#c4a35a', 'B': '#16a34a', 'C': '#3b82f6', 'D': '#a855f7', 'Wild Card 1': '#f59e0b', 'Wild Card 2': '#f97316' };
             const totalEntries = analyticsEntries.length;
 
+            // Check if an entry is selected
+            const selectedId = document.getElementById('analytics-entry-dropdown')?.value;
+            const selectedEntry = selectedId ? analyticsEntries.find(e => e.id === selectedId || (e.entryName || e.name) === selectedId) : null;
+
             let html = '';
             const pickDistributions = {};
 
@@ -3030,6 +3050,12 @@
 
                 pickDistributions[g.key] = counts;
 
+                // If an entry is selected, only show their pick for this group
+                let myPick = null;
+                if (selectedEntry) {
+                    for (const f of g.fields) { if (selectedEntry[f]) { myPick = selectedEntry[f]; break; } }
+                }
+
                 // Sort by count descending
                 const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
                 const color = groupColors[g.key] || '#64748b';
@@ -3041,9 +3067,13 @@
                     html += '<p class="text-slate-500 text-sm">No picks in this group yet.</p>';
                 } else {
                     sorted.forEach(([golfer, count]) => {
+                        // If entry selected, only show the golfer they picked
+                        if (selectedEntry && golfer !== myPick) return;
+
                         const pct = Math.round((count / totalEntries) * 100);
+                        const isMyPick = selectedEntry && golfer === myPick;
                         html += '<div class="mb-3">';
-                        html += '<div class="flex justify-between text-sm mb-1"><span class="text-slate-300">' + golfer + '</span><span class="font-semibold" style="color:' + color + ';">' + count + ' (' + pct + '%)</span></div>';
+                        html += '<div class="flex justify-between text-sm mb-1"><span class="text-slate-300">' + golfer + (isMyPick ? ' ⭐' : '') + '</span><span class="font-semibold" style="color:' + color + ';">' + count + ' (' + pct + '%)</span></div>';
                         html += '<div style="background:rgba(255,255,255,0.1); border-radius:4px; height:8px; overflow:hidden;">';
                         html += '<div style="width:' + pct + '%; height:100%; background:' + color + '; border-radius:4px; transition:width 0.3s;"></div>';
                         html += '</div></div>';
@@ -3054,42 +3084,8 @@
 
             container.innerHTML = html;
 
-            // Comparison section
-            const selectedId = document.getElementById('analytics-entry-dropdown')?.value;
-            if (selectedId && compContainer) {
-                const entry = analyticsEntries.find(e => e.id === selectedId || (e.entryName || e.name) === selectedId);
-                if (entry) {
-                    compContainer.style.display = '';
-                    let compHtml = '<div class="stat-card"><h4 class="font-bold text-lg mb-4" style="color:#c4a35a;">Your Pick Popularity</h4>';
-                    compHtml += '<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">';
-
-                    groups.forEach(g => {
-                        let pick = null;
-                        for (const f of g.fields) { if (entry[f]) { pick = entry[f]; break; } }
-                        if (!pick) return;
-
-                        const counts = pickDistributions[g.key] || {};
-                        const count = counts[pick] || 0;
-                        const pct = Math.round((count / totalEntries) * 100);
-                        const color = groupColors[g.key] || '#64748b';
-                        const label = g.key.startsWith('Wild') ? g.key : 'Group ' + g.key;
-
-                        compHtml += '<div style="background:rgba(255,255,255,0.05); border-radius:8px; padding:12px; border:1px solid rgba(255,255,255,0.1);">';
-                        compHtml += '<div class="text-xs text-slate-400 mb-1">' + label + '</div>';
-                        compHtml += '<div class="text-sm font-semibold text-slate-200 mb-1">' + pick + '</div>';
-                        compHtml += '<div class="text-lg font-bold" style="color:' + color + ';">' + pct + '% of entries</div>';
-                        compHtml += '<div class="text-xs text-slate-500">' + count + ' of ' + totalEntries + ' entrants picked</div>';
-                        compHtml += '</div>';
-                    });
-
-                    compHtml += '</div></div>';
-                    compContainer.innerHTML = compHtml;
-                } else {
-                    compContainer.style.display = 'none';
-                }
-            } else if (compContainer) {
-                compContainer.style.display = 'none';
-            }
+            // Hide comparison section since it's now integrated into the charts
+            if (compContainer) compContainer.style.display = 'none';
         }
 
         // =====================================================

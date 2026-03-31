@@ -74,14 +74,41 @@ function parseEspnApiResponse(data: any): any {
 
     // ---- Venue / course info ----
     let courseName: string | null = null;
+    // ESPN structures venue data differently across endpoints:
+    // competition.venue, event.venue, competition.courses[], event.courses[]
     const venue = competition.venue || event.venue;
     if (venue) {
-      const course = venue.course?.name || venue.fullName || venue.shortName || null;
+      const course = venue.course?.name || venue.courses?.[0]?.name || venue.fullName || venue.shortName || null;
       const city = venue.address?.city || null;
       const state = venue.address?.state || null;
       const location = [city, state].filter(Boolean).join(', ');
       courseName = course ? (location ? `${course} — ${location}` : course) : null;
     }
+    // Fallback: check top-level courses array
+    if (!courseName) {
+      const courses = competition.courses || event.courses;
+      if (courses && courses.length > 0) {
+        const c = courses[0];
+        const cName = c.name || c.courseName || null;
+        const city = c.address?.city || venue?.address?.city || null;
+        const state = c.address?.state || venue?.address?.state || null;
+        const location = [city, state].filter(Boolean).join(', ');
+        courseName = cName ? (location ? `${cName} — ${location}` : cName) : null;
+      }
+    }
+    // Final fallback: try event.shortName which sometimes includes venue
+    if (!courseName && event.shortName && event.shortName !== event.name) {
+      courseName = event.shortName;
+    }
+
+    // Debug logging for venue resolution
+    console.log('[ESPN] Venue debug:', JSON.stringify({
+      competitionVenue: competition.venue ? Object.keys(competition.venue) : null,
+      eventVenue: event.venue ? Object.keys(event.venue) : null,
+      competitionCourses: competition.courses?.length || 0,
+      eventCourses: event.courses?.length || 0,
+      resolvedCourseName: courseName,
+    }));
 
     result.tournament = {
       name: event.name || event.shortName || 'Unknown',
@@ -296,6 +323,45 @@ export async function GET() {
 
     const apiData = await response.json();
     const scores = parseEspnApiResponse(apiData);
+
+    // If no course name resolved, try the ESPN event summary endpoint
+    if (scores.tournament && !scores.tournament.courseName) {
+      try {
+        const eventId = apiData?.events?.[0]?.id;
+        if (eventId) {
+          const summaryRes = await fetch(
+            `https://site.api.espn.com/apis/site/v2/sports/golf/pga/summary?event=${eventId}`,
+            { headers: { 'Accept': 'application/json' }, cache: 'no-store' }
+          );
+          if (summaryRes.ok) {
+            const summary = await summaryRes.json();
+            const courses = summary.courses || summary.event?.courses || [];
+            const venue = summary.event?.venue || summary.venue;
+            if (courses.length > 0) {
+              const c = courses[0];
+              const cName = c.name || c.courseName;
+              const city = c.address?.city || venue?.address?.city;
+              const state = c.address?.state || venue?.address?.state;
+              const loc = [city, state].filter(Boolean).join(', ');
+              scores.tournament.courseName = cName ? (loc ? `${cName} — ${loc}` : cName) : null;
+            } else if (venue) {
+              const vName = venue.fullName || venue.shortName;
+              const city = venue.address?.city;
+              const state = venue.address?.state;
+              const loc = [city, state].filter(Boolean).join(', ');
+              scores.tournament.courseName = vName ? (loc ? `${vName} — ${loc}` : vName) : null;
+            }
+            console.log('[ESPN] Summary venue debug:', JSON.stringify({
+              coursesCount: courses.length,
+              venue: venue ? Object.keys(venue) : null,
+              resolved: scores.tournament.courseName,
+            }));
+          }
+        }
+      } catch (e) {
+        console.log('[ESPN] Summary fetch failed:', e);
+      }
+    }
 
     if (scores.players.length > 0) {
       await writeScores(scores);
