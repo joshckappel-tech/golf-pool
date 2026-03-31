@@ -4732,8 +4732,10 @@
                 const notStartedMsg = document.getElementById('tournament-not-started');
                 const headerInfo = document.getElementById('tournament-header-info');
 
-                if (espnName && !tournamentNamesMatch(espnName, adminName)) {
-                    // ESPN is showing a different tournament — hide leaderboard and header
+                // Only block leaderboard if no event ID is set AND names don't match
+                const hasEventId = !!(poolSettings.espnEventId);
+                if (!hasEventId && espnName && adminName && !tournamentNamesMatch(espnName, adminName)) {
+                    // ESPN is showing a different tournament and no event ID is locked — hide leaderboard
                     if (leaderboardContent) leaderboardContent.style.display = 'none';
                     if (headerInfo) headerInfo.style.display = 'none';
                     if (notStartedMsg) {
@@ -4742,6 +4744,7 @@
                             '<div style="font-size:3rem; margin-bottom:16px;">⛳</div>' +
                             '<h3 style="font-size:1.4rem; font-weight:700; color:#e2e8f0; margin-bottom:8px;">Leaderboard Not Yet Available</h3>' +
                             '<p style="color:#94a3b8; font-size:1rem;">The leaderboard will be visible once the <strong style="color:#c4a35a;">' + adminName + '</strong> begins.</p>' +
+                            '<p style="color:#64748b; font-size:0.85rem; margin-top:12px;">Tip: Set the ESPN Event ID in Admin settings to lock to a specific tournament.</p>' +
                             '</div>';
                     }
                     return;
