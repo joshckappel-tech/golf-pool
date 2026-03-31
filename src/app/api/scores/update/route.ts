@@ -128,29 +128,46 @@ async function fetchFromCoreApi(eventId: string): Promise<any> {
       const cid = item.id;
       const compUrl = `${COMP_BASE}/competitors/${cid}`;
 
-      // Resolve score, athlete, status, and linescores list in parallel
-      const [scoreData, athleteData, statusData, linescoresListData] = await Promise.all([
+      // Resolve score, athlete, status, linescores, and statistics in parallel
+      const [scoreData, athleteData, statusData, linescoresListData, statisticsData] = await Promise.all([
         item.score?.$ref ? fetchJson(item.score.$ref) : (typeof item.score === 'object' && item.score?.value !== undefined ? item.score : fetchJson(`${compUrl}/score`)),
         item.athlete?.$ref ? fetchJson(item.athlete.$ref) : item.athlete,
         item.status?.$ref ? fetchJson(item.status.$ref) : item.status,
         fetchJson(`${compUrl}/linescores?limit=10`),
+        fetchJson(`${compUrl}/statistics`),
       ]);
 
-      // Linescores list returns {items: [{$ref}, ...]} — resolve each round
+      // Linescores list returns {items: [...]} — items are inline round data
       let linescores: any[] = [];
       if (linescoresListData?.items && linescoresListData.items.length > 0) {
-        // Check if items have inline data or are refs
         const firstLs = linescoresListData.items[0];
         if (firstLs.value !== undefined) {
-          // Inline data
           linescores = linescoresListData.items;
         } else if (firstLs.$ref) {
-          // Need to resolve each round
           linescores = await Promise.all(
             linescoresListData.items.map((ls: any) => ls.$ref ? fetchJson(ls.$ref) : ls)
           );
         }
       }
+
+      // Extract earnings from statistics
+      // Path: statistics.splits.categories[0].stats → find {name: "amount"} or {abbreviation: "EARNINGS"}
+      let earnings: number | null = null;
+      try {
+        const categories = statisticsData?.splits?.categories || [];
+        for (const cat of categories) {
+          for (const stat of (cat.stats || [])) {
+            if (stat.name === 'amount' || stat.name === 'officialAmount' || stat.abbreviation === 'EARNINGS' || stat.abbreviation === 'OFAMOUNT') {
+              if (stat.value !== undefined && stat.value !== null) {
+                earnings = typeof stat.value === 'number' ? stat.value : parseFloat(String(stat.value).replace(/[$,]/g, ''));
+                if (isNaN(earnings as number)) earnings = null;
+                break;
+              }
+            }
+          }
+          if (earnings !== null) break;
+        }
+      } catch {}
 
       return {
         id: cid,
@@ -161,7 +178,7 @@ async function fetchFromCoreApi(eventId: string): Promise<any> {
         athlete: athleteData,
         status: statusData,
         linescores: linescores.filter(Boolean),
-        earnings: item.earnings, // might exist on some endpoints
+        earnings,
       };
     }));
     allCompetitors.push(...batchResults);
@@ -282,43 +299,62 @@ async function fetchFromCoreApi(eventId: string): Promise<any> {
       const athlete = c.athlete || {};
       const name = athlete.displayName || athlete.fullName || athlete.shortName || `Player ${c.id || '?'}`;
 
-      // Score — resolved score object has {value (total strokes), displayValue (to par)}
+      // Score — resolved score object: {value: 259 (total strokes), displayValue: "-21" (to par)}
       let scoreToPar: number | null = null;
       let scoreDisplay = 'E';
       let totalStrokesFromScore: number | null = null;
       if (c.score) {
-        if (c.score.displayValue !== undefined) {
-          scoreToPar = parseScoreToPar(c.score.displayValue);
-          scoreDisplay = String(c.score.displayValue);
+        // completedRoundsDisplayValue is the best field for score to par
+        const parDisplay = c.score.completedRoundsDisplayValue || c.score.displayValue;
+        if (parDisplay !== undefined) {
+          scoreToPar = parseScoreToPar(parDisplay);
+          scoreDisplay = String(parDisplay);
         } else if (c.score.value !== undefined) {
           scoreToPar = parseScoreToPar(c.score.value);
           scoreDisplay = String(c.score.value);
         }
-        if (c.score.value !== undefined && typeof c.score.value === 'number') {
-          totalStrokesFromScore = c.score.value; // e.g. 259
+        // Total strokes from score.value or completedRoundsValue
+        const totalVal = c.score.completedRoundsValue ?? c.score.value;
+        if (totalVal !== undefined && typeof totalVal === 'number') {
+          totalStrokesFromScore = totalVal;
         }
       }
 
       // Player status from resolved status object
+      // status.type.name: "STATUS_FINISH", "STATUS_CUT", "STATUS_WITHDRAWN", etc.
       let playerStatus = 'active';
-      const statusTypeName = (c.status?.type?.name || c.status?.type?.description || '').toLowerCase();
+      const statusTypeName = (c.status?.type?.name || '').toLowerCase();
       if (statusTypeName.includes('cut')) playerStatus = 'cut';
       else if (statusTypeName.includes('wd') || statusTypeName.includes('withdraw')) playerStatus = 'withdrawn';
       else if (statusTypeName.includes('dq') || statusTypeName.includes('disqualif')) playerStatus = 'disqualified';
 
-      // Also check displayValue for CUT/WD/DQ
-      const scoreStr = String(scoreDisplay).toLowerCase();
-      if (scoreStr === 'cut') playerStatus = 'cut';
-      else if (scoreStr === 'wd') playerStatus = 'withdrawn';
-      else if (scoreStr === 'dq') playerStatus = 'disqualified';
-
-      // Cut detection: if tournament is complete and player has < 4 linescores
+      // Cut detection fallback: if tournament is complete and player has < 4 linescores
       if (playerStatus === 'active' && tournamentComplete && c.linescores.length > 0 && c.linescores.length < 4) {
         playerStatus = 'cut';
       }
 
+      // ESPN official position from status.position: {displayName: "1", isTie: false}
+      let espnPos: string | null = null;
+      if (c.status?.position) {
+        const pos = c.status.position;
+        const posNum = pos.displayName || pos.id;
+        if (posNum) {
+          espnPos = pos.isTie ? `T${posNum}` : `${posNum}`;
+        }
+      }
+
+      // Thru from status
+      let thru = '--';
+      if (playerStatus !== 'active') {
+        thru = '--';
+      } else if (c.status?.displayValue) {
+        thru = c.status.displayValue; // "F" for finished
+      } else if (tournamentComplete) {
+        thru = 'F';
+      }
+
       // Round scores from resolved linescores
-      // Each linescore: {value: 65, displayValue: "-5", period: 1, ...}
+      // Each linescore: {value: 64, displayValue: "-6", period: 1, ...}
       const ls = c.linescores || [];
       const r1 = ls[0]?.value !== undefined ? Number(ls[0].value) : null;
       const r2 = ls[1]?.value !== undefined ? Number(ls[1].value) : null;
@@ -331,30 +367,19 @@ async function fetchFromCoreApi(eventId: string): Promise<any> {
         ? completedRounds.reduce((a, b) => a + b, 0)
         : totalStrokesFromScore;
 
-      // Thru
-      let thru = '--';
-      if (playerStatus !== 'active') {
-        thru = '--';
-      } else if (tournamentComplete) {
-        thru = 'F';
-      }
-
-      // Today (last round score to par)
+      // Today (last completed round score to par)
       let today: number | null = null;
       if (playerStatus === 'active' && ls.length > 0) {
         const lastRound = ls[ls.length - 1];
         today = parseScoreToPar(lastRound?.displayValue);
       }
 
-      // Earnings — check competitor directly, then check score object
-      let earnings: number | null = null;
-      if (c.earnings !== undefined && c.earnings !== null) {
-        earnings = typeof c.earnings === 'number' ? c.earnings : parseFloat(String(c.earnings).replace(/[$,]/g, ''));
-        if (isNaN(earnings as number)) earnings = null;
-      }
+      // Earnings already extracted from statistics in batch resolution
+      const earnings = c.earnings;
 
       parsed.push({
         name,
+        pos: espnPos, // Use ESPN's official position
         score: scoreToPar,
         scoreDisplay,
         today,
@@ -371,21 +396,23 @@ async function fetchFromCoreApi(eventId: string): Promise<any> {
     }
   }
 
-  // Sort by score ascending (best first)
+  // Sort by ESPN position (active players first, then cut/wd/dq)
   parsed.sort((a, b) => {
+    // Active players come first
+    const aActive = a.status === 'active' ? 0 : 1;
+    const bActive = b.status === 'active' ? 0 : 1;
+    if (aActive !== bActive) return aActive - bActive;
+    // Within same status group, sort by score
     if (a._sortScore !== b._sortScore) return a._sortScore - b._sortScore;
     return (a.totalStrokes || 999) - (b.totalStrokes || 999);
   });
 
-  // Assign positions with tie handling
+  // For any players missing ESPN position, assign calculated positions
   for (let i = 0; i < parsed.length; i++) {
     const p = parsed[i];
+    if (p.pos) continue; // Already has ESPN position
     if (p.status !== 'active') {
       p.pos = p.status === 'cut' ? 'CUT' : p.status === 'withdrawn' ? 'WD' : 'DQ';
-      continue;
-    }
-    if (i > 0 && parsed[i - 1].status === 'active' && parsed[i - 1].score === p.score) {
-      p.pos = parsed[i - 1].pos;
     } else {
       let activeCount = 0;
       for (let j = 0; j < i; j++) {
@@ -395,8 +422,7 @@ async function fetchFromCoreApi(eventId: string): Promise<any> {
       let isTied = false;
       for (let j = i + 1; j < parsed.length; j++) {
         if (parsed[j].status === 'active' && parsed[j].score === p.score) {
-          isTied = true;
-          break;
+          isTied = true; break;
         }
       }
       p.pos = isTied ? `T${posNum}` : `${posNum}`;
