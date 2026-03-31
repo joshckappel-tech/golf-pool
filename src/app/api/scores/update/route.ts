@@ -456,7 +456,7 @@ export async function GET(request: Request) {
             }
 
             // Broadcast / TV info
-            const broadcasts = ev.broadcasts || competition?.broadcasts || [];
+            const broadcasts = ev.broadcasts || ev.competitions?.[0]?.broadcasts || [];
             if (broadcasts.length > 0) {
               const networks = broadcasts.flatMap((b: any) => b.names || (b.media?.shortName ? [b.media.shortName] : []));
               if (networks.length > 0) scores.tournament.network = networks.join(', ');
