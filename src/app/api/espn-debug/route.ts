@@ -1,81 +1,173 @@
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const eventId = url.searchParams.get('eventId') || '401811939';
+  const CORE = `https://sports.core.api.espn.com/v2/sports/golf/leagues/pga`;
 
-  const endpoints = [
-    { name: 'scoreboard (default)', url: 'https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard' },
-    { name: 'scoreboard ?event=', url: `https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard?event=${eventId}` },
-    { name: 'summary ?event=', url: `https://site.api.espn.com/apis/site/v2/sports/golf/pga/summary?event=${eventId}` },
-    { name: 'leaderboard ?event=', url: `https://site.api.espn.com/apis/site/v2/sports/golf/pga/leaderboard?event=${eventId}` },
-    { name: 'web scoreboard ?event=', url: `https://site.web.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard?event=${eventId}` },
-    { name: 'web leaderboard ?event=', url: `https://site.web.api.espn.com/apis/site/v2/sports/golf/pga/leaderboard?event=${eventId}` },
-    { name: 'web summary ?event=', url: `https://site.web.api.espn.com/apis/site/v2/sports/golf/pga/summary?event=${eventId}` },
-    { name: 'core events', url: `https://sports.core.api.espn.com/v2/sports/golf/leagues/pga/events/${eventId}` },
-    { name: 'core competitions', url: `https://sports.core.api.espn.com/v2/sports/golf/leagues/pga/events/${eventId}/competitions/${eventId}` },
-    { name: 'core competitors', url: `https://sports.core.api.espn.com/v2/sports/golf/leagues/pga/events/${eventId}/competitions/${eventId}/competitors` },
-  ];
+  const result: any = { eventId };
 
-  const results: any[] = [];
+  // 1. Fetch the competitors list (first page only)
+  try {
+    const listRes = await fetch(`${CORE}/events/${eventId}/competitions/${eventId}/competitors?limit=3&page=1`, {
+      headers: { 'Accept': 'application/json' }, cache: 'no-store',
+    });
+    result.listStatus = listRes.status;
+    if (listRes.ok) {
+      const listData = await listRes.json();
+      result.listTopKeys = Object.keys(listData);
+      result.listCount = listData.count;
+      result.listPageCount = listData.pageCount;
+      result.listItemCount = listData.items?.length;
 
-  for (const ep of endpoints) {
-    try {
-      const res = await fetch(ep.url, {
-        headers: { 'Accept': 'application/json' },
-        cache: 'no-store',
-      });
-      const status = res.status;
-      let info: any = { status };
+      // Check if items are refs or full objects
+      if (listData.items?.[0]) {
+        const item = listData.items[0];
+        result.firstItemKeys = Object.keys(item);
+        result.firstItemIsRef = !!item.$ref && Object.keys(item).length <= 3;
 
-      if (res.ok) {
-        const data = await res.json();
-        info.topKeys = Object.keys(data);
+        // If it's a ref, follow it
+        if (item.$ref) {
+          result.firstItemRef = item.$ref;
+          try {
+            const compRes = await fetch(item.$ref, {
+              headers: { 'Accept': 'application/json' }, cache: 'no-store',
+            });
+            if (compRes.ok) {
+              const comp = await compRes.json();
+              result.resolvedCompetitorKeys = Object.keys(comp);
 
-        // Check for event name
-        if (data.events?.[0]) {
-          info.eventName = data.events[0].name;
-          info.eventId = data.events[0].id;
-          const comp = data.events[0].competitions?.[0];
-          info.competitorsCount = comp?.competitors?.length || 0;
-          if (comp?.competitors?.[0]) {
-            const c = comp.competitors[0];
-            info.firstCompetitorKeys = Object.keys(c);
-            info.firstCompetitorName = c.athlete?.displayName;
-            info.firstCompetitorEarnings = c.earnings;
-            info.firstCompetitorPrize = c.prize;
-            info.firstCompetitorMoney = c.money;
-            info.firstCompetitorStats = c.statistics?.map((s: any) => s.name);
+              // Dump key fields (not the full object to keep response manageable)
+              result.competitor = {
+                id: comp.id,
+                uid: comp.uid,
+                score: comp.score,
+                earnings: comp.earnings,
+                amateur: comp.amateur,
+                movement: comp.movement,
+                order: comp.order,
+                statusKeys: comp.status ? Object.keys(comp.status) : null,
+                statusType: comp.status?.type,
+                statusPeriod: comp.status?.period,
+                athleteType: typeof comp.athlete,
+                athleteKeys: comp.athlete ? Object.keys(comp.athlete) : null,
+                athleteRef: comp.athlete?.$ref,
+                athleteDisplayName: comp.athlete?.displayName,
+                linescoresCount: Array.isArray(comp.linescores) ? comp.linescores.length : null,
+                linescoresType: Array.isArray(comp.linescores) && comp.linescores[0] ? typeof comp.linescores[0] : null,
+                linescoreFirstKeys: Array.isArray(comp.linescores) && comp.linescores[0] ? Object.keys(comp.linescores[0]) : null,
+                linescoreFirstValue: Array.isArray(comp.linescores) && comp.linescores[0] ? comp.linescores[0].value : null,
+                linescoreFirstRef: Array.isArray(comp.linescores) && comp.linescores[0] ? comp.linescores[0].$ref : null,
+                statisticsCount: Array.isArray(comp.statistics) ? comp.statistics.length : null,
+                statisticsType: Array.isArray(comp.statistics) && comp.statistics[0] ? typeof comp.statistics[0] : null,
+                statisticsFirstKeys: Array.isArray(comp.statistics) && comp.statistics[0] ? Object.keys(comp.statistics[0]) : null,
+              };
+
+              // If linescores are refs, follow the first one
+              if (comp.linescores?.[0]?.$ref) {
+                try {
+                  const lsRes = await fetch(comp.linescores[0].$ref, {
+                    headers: { 'Accept': 'application/json' }, cache: 'no-store',
+                  });
+                  if (lsRes.ok) {
+                    const ls = await lsRes.json();
+                    result.resolvedLinescore = ls;
+                  }
+                } catch (e: any) {
+                  result.linescoreResolveError = e.message;
+                }
+              }
+
+              // If athlete is a ref, follow it
+              if (comp.athlete?.$ref) {
+                try {
+                  const athRes = await fetch(comp.athlete.$ref, {
+                    headers: { 'Accept': 'application/json' }, cache: 'no-store',
+                  });
+                  if (athRes.ok) {
+                    const ath = await athRes.json();
+                    result.resolvedAthleteKeys = Object.keys(ath);
+                    result.resolvedAthlete = {
+                      displayName: ath.displayName,
+                      fullName: ath.fullName,
+                      shortName: ath.shortName,
+                      flagAlt: ath.flag?.alt,
+                    };
+                  }
+                } catch (e: any) {
+                  result.athleteResolveError = e.message;
+                }
+              }
+
+              // If statistics are refs, follow the first one
+              if (comp.statistics?.[0]?.$ref) {
+                try {
+                  const stRes = await fetch(comp.statistics[0].$ref, {
+                    headers: { 'Accept': 'application/json' }, cache: 'no-store',
+                  });
+                  if (stRes.ok) {
+                    result.resolvedStatistic = await stRes.json();
+                  }
+                } catch (e: any) {
+                  result.statisticResolveError = e.message;
+                }
+              }
+
+              // If score is a ref, follow it
+              if (comp.score?.$ref) {
+                try {
+                  const scRes = await fetch(comp.score.$ref, {
+                    headers: { 'Accept': 'application/json' }, cache: 'no-store',
+                  });
+                  if (scRes.ok) {
+                    result.resolvedScore = await scRes.json();
+                  }
+                } catch (e: any) {
+                  result.scoreResolveError = e.message;
+                }
+              }
+            }
+          } catch (e: any) {
+            result.resolveError = e.message;
           }
+        } else {
+          // Item IS the full competitor — dump it
+          result.competitor = {
+            id: item.id,
+            score: item.score,
+            earnings: item.earnings,
+            athleteKeys: item.athlete ? Object.keys(item.athlete) : null,
+            athleteDisplayName: item.athlete?.displayName,
+            linescoresCount: item.linescores?.length,
+            linescoreFirstKeys: item.linescores?.[0] ? Object.keys(item.linescores[0]) : null,
+          };
         }
-        if (data.event) {
-          info.eventName = data.event.name;
-          info.eventId = data.event.id;
-        }
-        if (data.competitions?.[0]?.competitors) {
-          info.competitorsCount = data.competitions[0].competitors.length;
-          const c = data.competitions[0].competitors[0];
-          info.firstCompetitorKeys = Object.keys(c);
-          info.firstCompetitorName = c.athlete?.displayName;
-          info.firstCompetitorEarnings = c.earnings;
-        }
-        if (data.header) {
-          info.headerKeys = Object.keys(data.header);
-        }
-        if (data.leaderboard) {
-          info.leaderboardLength = data.leaderboard.length;
-        }
-        if (data.items) {
-          info.itemsCount = data.items?.length;
-          if (data.items?.[0]) info.firstItemKeys = Object.keys(data.items[0]);
-        }
-        if (data.name) info.name = data.name;
-        if (data.$ref) info.ref = data.$ref;
       }
-
-      results.push({ endpoint: ep.name, url: ep.url, ...info });
-    } catch (e: any) {
-      results.push({ endpoint: ep.name, url: ep.url, error: e.message });
     }
+  } catch (e: any) {
+    result.error = e.message;
   }
 
-  return Response.json({ eventId, results }, { headers: { 'Cache-Control': 'no-store' } });
+  // 2. Also fetch competition status
+  try {
+    const compRes = await fetch(`${CORE}/events/${eventId}/competitions/${eventId}`, {
+      headers: { 'Accept': 'application/json' }, cache: 'no-store',
+    });
+    if (compRes.ok) {
+      const comp = await compRes.json();
+      result.competitionKeys = Object.keys(comp);
+      result.competitionStatus = comp.status;
+      // Check if status is a ref
+      if (comp.status?.$ref) {
+        try {
+          const stRes = await fetch(comp.status.$ref, {
+            headers: { 'Accept': 'application/json' }, cache: 'no-store',
+          });
+          if (stRes.ok) {
+            result.resolvedCompetitionStatus = await stRes.json();
+          }
+        } catch (e: any) {}
+      }
+    }
+  } catch (e: any) {}
+
+  return Response.json(result, { headers: { 'Cache-Control': 'no-store' } });
 }
