@@ -678,6 +678,14 @@
         .leaderboard-table {
             min-width: 600px;
         }
+        /* On mobile, let player names wrap naturally */
+        @media (max-width: 768px) {
+            .leaderboard-table td:nth-child(2) {
+                white-space: normal;
+                word-break: keep-all;
+                min-width: 100px;
+            }
+        }
         .entry-table {
             min-width: 800px;
         }
@@ -691,6 +699,23 @@
             #entry-main-content .grid.md\\:grid-cols-2,
             #entry-main-content .grid.md\\:grid-cols-3,
             #entry-main-content .grid.md\\:grid-cols-4 {
+                grid-template-columns: 1fr !important;
+            }
+            /* Fix entry form overflow on mobile */
+            #entry {
+                overflow-x: hidden;
+            }
+            #entry-main-content {
+                max-width: 100%;
+                overflow-x: hidden;
+            }
+            #entry-main-content input,
+            #entry-main-content select,
+            #entry-main-content textarea {
+                max-width: 100%;
+                box-sizing: border-box;
+            }
+            #entry .grid.grid-cols-1.lg\\:grid-cols-4 {
                 grid-template-columns: 1fr !important;
             }
 
@@ -763,6 +788,7 @@
                         <button class="tab-button" onclick="switchTab('entry')">Entry Form</button>
                         <button class="tab-button hidden" id="my-entries-tab" onclick="switchTab('myentries')">My Entries</button>
                         <button class="tab-button" onclick="switchTab('scenario')">Scenarios</button>
+                        <button class="tab-button" onclick="switchTab('analytics')">Analytics</button>
                         <button class="tab-button hidden" id="admin-tab-btn" onclick="switchTab('admin')">Admin</button>
                     </div>
                 </div>
@@ -832,7 +858,7 @@
                                 <li>• Real-time scenario generator</li>
                             </ul>
                         </div>
-                        <div class="stat-card">
+                        <div class="stat-card" id="home-payout-card" style="display:none;">
                             <h4 class="text-lg font-bold mb-3" style="color: #16a34a;">Payout Distribution</h4>
                             <div id="home-payout-distribution" class="space-y-2 text-sm text-slate-300">
                             </div>
@@ -939,8 +965,14 @@
                         </div>
                     </div>
 
-                    <div class="flex gap-4">
-                        <input type="text" id="searchInput" class="search-input flex-1" placeholder="Search by entrant name..." onkeyup="filterLeaderboard()">
+                    <div class="flex flex-wrap gap-4 items-end">
+                        <input type="text" id="searchInput" class="search-input flex-1" placeholder="Search by entrant name..." onkeyup="filterLeaderboard()" style="min-width:200px;">
+                        <div>
+                            <label class="text-xs text-slate-500">Filter by golfer:</label>
+                            <select id="poolGolferFilter" onchange="filterLeaderboard()" class="px-3 py-2 rounded text-sm" style="background:#1e293b; border:1px solid rgba(22,163,74,0.3); color:#e2e8f0;">
+                                <option value="">All golfers</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 
@@ -1037,6 +1069,24 @@
                 </div>
                 <div id="myentries-container">
                     <p class="text-slate-400">Loading your entries...</p>
+                </div>
+            </div>
+
+            <!-- ANALYTICS TAB -->
+            <div id="analytics" class="tab-pane">
+                <div class="mb-6">
+                    <h2 class="text-2xl sm:text-3xl font-bold mb-2">Pick Distribution Analytics</h2>
+                    <p class="text-slate-400 text-sm">See how picks are distributed across each group and compare your selections.</p>
+                </div>
+                <div id="analytics-entry-select" class="mb-6">
+                    <label class="text-sm text-slate-400 mr-2">Compare your entry:</label>
+                    <select id="analytics-entry-dropdown" onchange="renderAnalytics()" class="px-3 py-2 rounded text-sm" style="background:#1e293b; border:1px solid rgba(22,163,74,0.3); color:#e2e8f0;">
+                        <option value="">— Select your entry —</option>
+                    </select>
+                </div>
+                <div id="analytics-charts" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                </div>
+                <div id="analytics-comparison" class="mt-6" style="display:none;">
                 </div>
             </div>
 
@@ -2380,6 +2430,9 @@
             if (tabName === 'scenario') {
                 renderScenarioLeaderboard();
             }
+            if (tabName === 'analytics') {
+                loadAnalyticsData();
+            }
         }
 
         function switchAdminTab(tabName) {
@@ -2474,6 +2527,11 @@
                     const nameEl = document.getElementById('tournamentNameDisplay');
                     if (nameEl) nameEl.textContent = t.name;
                 }
+                // Course / venue name
+                if (t.courseName) {
+                    const courseEl = document.getElementById('tournamentCourseDisplay');
+                    if (courseEl) courseEl.textContent = t.courseName;
+                }
             }
 
             return { tournament: t || null, lastUpdated: data?.lastUpdated || null };
@@ -2566,12 +2624,41 @@
             const tbody = document.getElementById('leaderboardBody');
             if (!tbody) return;
 
-            // Hide pool standings before deadline or when not live (unless admin)
+            // Show pool standings based on status
             const lockedEl = document.getElementById('pool-standings-locked');
             const contentEl = document.getElementById('pool-standings-content');
-            if ((isBeforeDeadline() || !isPoolLive()) && !isAdminUser) {
+            const isLive = isPoolLive();
+            const isOpen = isEntriesOpen();
+
+            if (!isLive && !isOpen && !isAdminUser) {
+                // Closed — fully locked
                 if (lockedEl) lockedEl.style.display = 'block';
                 if (contentEl) contentEl.style.display = 'none';
+                return;
+            } else if (isOpen && !isAdminUser) {
+                // Entries Open — show entrant names only (no picks)
+                if (lockedEl) lockedEl.style.display = 'none';
+                if (contentEl) contentEl.style.display = '';
+                // Show names-only view
+                let entries = [];
+                try {
+                    const res = await fetch('/api/entries');
+                    if (res.ok) entries = await res.json();
+                } catch (e) {}
+                const paidEntries = entries.filter(e => e.paymentStatus === 'paid' && e.entryStatus !== 'rejected');
+                const statusEl = document.querySelector('#leaderboard .status-badge');
+                if (statusEl) {
+                    statusEl.textContent = paidEntries.length + ' Entries — Picks Hidden Until Live';
+                    statusEl.className = 'status-badge status-setup';
+                }
+                if (paidEntries.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:20px; color:#94a3b8;">No entries submitted yet. Be the first to enter!</td></tr>';
+                } else {
+                    tbody.innerHTML = paidEntries.map((e, i) => {
+                        const name = e.entryName || e.name || 'Unknown';
+                        return '<tr><td><span class="rank-badge rank-3-badge">' + (i + 1) + '</span></td><td>' + name + '</td><td colspan="9" style="text-align:center; color:#64748b; font-style:italic;">Picks revealed when pool goes live</td></tr>';
+                    }).join('');
+                }
                 return;
             } else {
                 if (lockedEl) lockedEl.style.display = 'none';
@@ -2672,6 +2759,21 @@
                 statusEl.className = 'status-badge ' + (liveScoresReady ? 'status-in-progress' : 'status-setup');
             }
 
+            // Populate golfer filter dropdown
+            const gFilter = document.getElementById('poolGolferFilter');
+            if (gFilter) {
+                const golferSet = new Set();
+                standings.forEach(s => {
+                    [s.groupA?.golfer, s.groupB?.golfer, s.groupC?.golfer, s.groupD?.golfer, s.wc1?.golfer, s.wc2?.golfer].forEach(g => { if (g) golferSet.add(g); });
+                });
+                const currentVal = gFilter.value;
+                gFilter.innerHTML = '<option value="">All golfers</option>';
+                [...golferSet].sort().forEach(g => {
+                    gFilter.innerHTML += '<option value="' + g + '">' + g + '</option>';
+                });
+                if (currentVal) gFilter.value = currentVal;
+            }
+
             populateLeaderboard(standings);
         }
 
@@ -2686,6 +2788,8 @@
                 return;
             }
 
+            const isMobile = window.innerWidth <= 640;
+
             data.forEach((entry, index) => {
                 const rowClass = entry.rank === 1 ? 'rank-1' : (entry.rank <= 8 ? 'rank-2-8' : '');
                 const row = document.createElement('tr');
@@ -2695,9 +2799,16 @@
                 const rankBadgeClass = entry.rank === 1 ? 'rank-1-badge' : (entry.rank <= 3 ? 'rank-2-badge' : 'rank-3-badge');
                 const tbDisplay = typeof entry.tb === 'number' ? formatScoreToPar(entry.tb) : entry.tb;
 
+                // Abbreviate name on mobile: "John Smith" -> "J. Smith"
+                let displayName = entry.name || '';
+                if (isMobile && displayName.includes(' ')) {
+                    const parts = displayName.trim().split(/\s+/);
+                    displayName = parts[0].charAt(0) + '. ' + parts.slice(1).join(' ');
+                }
+
                 row.innerHTML = `
                     <td><span class="rank-badge ${rankBadgeClass}">${entry.rank}</span></td>
-                    <td>${entry.name}</td>
+                    <td>${displayName}</td>
                     <td>
                         <div class="text-sm font-semibold">${entry.groupA.golfer || '—'}</div>
                         <div class="text-xs text-slate-400">${formatPrizeMoney(entry.groupA.amount)}</div>
@@ -2734,9 +2845,19 @@
         // Filter Leaderboard
         function filterLeaderboard() {
             const searchInput = document.getElementById('searchInput').value.toLowerCase();
-            const filteredData = leaderboardData.filter(entry =>
-                (entry.name || '').toLowerCase().includes(searchInput)
-            );
+            const golferFilter = (document.getElementById('poolGolferFilter')?.value || '').toLowerCase();
+            const filteredData = leaderboardData.filter(entry => {
+                if (searchInput && !(entry.name || '').toLowerCase().includes(searchInput)) return false;
+                if (golferFilter) {
+                    const picks = [
+                        entry.groupA?.golfer, entry.groupB?.golfer,
+                        entry.groupC?.golfer, entry.groupD?.golfer,
+                        entry.wc1?.golfer, entry.wc2?.golfer
+                    ].map(g => (g || '').toLowerCase());
+                    if (!picks.includes(golferFilter)) return false;
+                }
+                return true;
+            });
             populateLeaderboard(filteredData);
         }
 
@@ -2827,6 +2948,9 @@
         function renderHomePayoutDistribution(entryCount, entryFee) {
             const container = document.getElementById('home-payout-distribution');
             if (!container) return;
+            // Only show payout distribution when pool is Live
+            const payoutCard = document.getElementById('home-payout-card');
+            if (payoutCard) payoutCard.style.display = isPoolLive() ? '' : 'none';
             const pcts = poolSettings.payoutPcts || [27.5, 21, 16, 12, 9, 6.5, 4.5, 3.5];
             const pool = (entryCount || 0) * (entryFee || 30);
             const labels = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th'];
@@ -2839,6 +2963,133 @@
             });
             if (html === '') html = '<p class="text-slate-500">Payout distribution not yet configured.</p>';
             container.innerHTML = html;
+        }
+
+        // =====================================================
+        // ANALYTICS TAB
+        // =====================================================
+        let analyticsEntries = [];
+
+        async function loadAnalyticsData() {
+            try {
+                const res = await fetch('/api/entries');
+                if (res.ok) {
+                    const all = await res.json();
+                    analyticsEntries = all.filter(e => e.paymentStatus === 'paid' && e.entryStatus !== 'rejected');
+                }
+            } catch (e) { console.log('Analytics load error:', e); }
+
+            // Populate entry dropdown
+            const dd = document.getElementById('analytics-entry-dropdown');
+            if (dd) {
+                const current = dd.value;
+                dd.innerHTML = '<option value="">— Select your entry —</option>';
+                analyticsEntries.forEach(e => {
+                    const name = e.entryName || e.name || 'Unknown';
+                    dd.innerHTML += '<option value="' + (e.id || name) + '">' + name + '</option>';
+                });
+                if (current) dd.value = current;
+            }
+            renderAnalytics();
+        }
+
+        function renderAnalytics() {
+            const container = document.getElementById('analytics-charts');
+            const compContainer = document.getElementById('analytics-comparison');
+            if (!container) return;
+
+            if (analyticsEntries.length === 0) {
+                container.innerHTML = '<div class="col-span-2" style="text-align:center; padding:40px; color:#94a3b8;">No paid entries yet to analyze.</div>';
+                if (compContainer) compContainer.style.display = 'none';
+                return;
+            }
+
+            // Count picks per group
+            const groups = [
+                { key: 'A', fields: ['groupA', 'pickGroupA'] },
+                { key: 'B', fields: ['groupB', 'pickGroupB'] },
+                { key: 'C', fields: ['groupC', 'pickGroupC'] },
+                { key: 'D', fields: ['groupD', 'pickGroupD'] },
+                { key: 'Wild Card 1', fields: ['wildCard1', 'wc1'] },
+                { key: 'Wild Card 2', fields: ['wildCard2', 'wc2'] },
+            ];
+
+            const groupColors = { 'A': '#c4a35a', 'B': '#16a34a', 'C': '#3b82f6', 'D': '#a855f7', 'Wild Card 1': '#f59e0b', 'Wild Card 2': '#f97316' };
+            const totalEntries = analyticsEntries.length;
+
+            let html = '';
+            const pickDistributions = {};
+
+            groups.forEach(g => {
+                const counts = {};
+                analyticsEntries.forEach(e => {
+                    let pick = null;
+                    for (const f of g.fields) { if (e[f]) { pick = e[f]; break; } }
+                    if (pick) counts[pick] = (counts[pick] || 0) + 1;
+                });
+
+                pickDistributions[g.key] = counts;
+
+                // Sort by count descending
+                const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+                const color = groupColors[g.key] || '#64748b';
+
+                html += '<div class="stat-card">';
+                html += '<h4 class="font-bold text-lg mb-4" style="color:' + color + ';">Group ' + g.key + '</h4>';
+
+                if (sorted.length === 0) {
+                    html += '<p class="text-slate-500 text-sm">No picks in this group yet.</p>';
+                } else {
+                    sorted.forEach(([golfer, count]) => {
+                        const pct = Math.round((count / totalEntries) * 100);
+                        html += '<div class="mb-3">';
+                        html += '<div class="flex justify-between text-sm mb-1"><span class="text-slate-300">' + golfer + '</span><span class="font-semibold" style="color:' + color + ';">' + count + ' (' + pct + '%)</span></div>';
+                        html += '<div style="background:rgba(255,255,255,0.1); border-radius:4px; height:8px; overflow:hidden;">';
+                        html += '<div style="width:' + pct + '%; height:100%; background:' + color + '; border-radius:4px; transition:width 0.3s;"></div>';
+                        html += '</div></div>';
+                    });
+                }
+                html += '</div>';
+            });
+
+            container.innerHTML = html;
+
+            // Comparison section
+            const selectedId = document.getElementById('analytics-entry-dropdown')?.value;
+            if (selectedId && compContainer) {
+                const entry = analyticsEntries.find(e => e.id === selectedId || (e.entryName || e.name) === selectedId);
+                if (entry) {
+                    compContainer.style.display = '';
+                    let compHtml = '<div class="stat-card"><h4 class="font-bold text-lg mb-4" style="color:#c4a35a;">Your Pick Popularity</h4>';
+                    compHtml += '<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">';
+
+                    groups.forEach(g => {
+                        let pick = null;
+                        for (const f of g.fields) { if (entry[f]) { pick = entry[f]; break; } }
+                        if (!pick) return;
+
+                        const counts = pickDistributions[g.key] || {};
+                        const count = counts[pick] || 0;
+                        const pct = Math.round((count / totalEntries) * 100);
+                        const color = groupColors[g.key] || '#64748b';
+                        const label = g.key.startsWith('Wild') ? g.key : 'Group ' + g.key;
+
+                        compHtml += '<div style="background:rgba(255,255,255,0.05); border-radius:8px; padding:12px; border:1px solid rgba(255,255,255,0.1);">';
+                        compHtml += '<div class="text-xs text-slate-400 mb-1">' + label + '</div>';
+                        compHtml += '<div class="text-sm font-semibold text-slate-200 mb-1">' + pick + '</div>';
+                        compHtml += '<div class="text-lg font-bold" style="color:' + color + ';">' + pct + '% of entries</div>';
+                        compHtml += '<div class="text-xs text-slate-500">' + count + ' of ' + totalEntries + ' entrants picked</div>';
+                        compHtml += '</div>';
+                    });
+
+                    compHtml += '</div></div>';
+                    compContainer.innerHTML = compHtml;
+                } else {
+                    compContainer.style.display = 'none';
+                }
+            } else if (compContainer) {
+                compContainer.style.display = 'none';
+            }
         }
 
         // =====================================================
@@ -3090,6 +3341,33 @@
             });
             container.innerHTML = html;
             scenarioInitialized = true;
+
+            // If no scenario adjustments, show top 20 from current pool standings
+            const hasAdj = Object.values(scenarioAdjustments).some(v => v !== 0);
+            if (!hasAdj) {
+                showDefaultScenarioStandings();
+            }
+        }
+
+        async function showDefaultScenarioStandings() {
+            const impactEl = document.getElementById('scenario-pool-impact');
+            if (!impactEl) return;
+            if (leaderboardData && leaderboardData.length > 0) {
+                // Use cached pool standings
+                const top20 = leaderboardData.slice(0, 20);
+                let html = '<p class="text-xs text-slate-500 mb-2">Current Pool Standings (Top 20)</p>';
+                top20.forEach(s => {
+                    const bgColor = s.rank === 1 ? 'rgba(196,163,90,0.15)' : 'rgba(30,58,31,0.4)';
+                    const borderColor = s.rank === 1 ? 'rgba(196,163,90,0.4)' : 'rgba(22,163,74,0.2)';
+                    html += '<div class="flex items-center gap-3 p-3 rounded" style="background:' + bgColor + '; border:1px solid ' + borderColor + ';">';
+                    html += '<span class="text-sm font-bold" style="color:#c4a35a; width:24px;">' + s.rank + '</span>';
+                    html += '<div class="flex-1"><p class="text-sm font-semibold">' + s.name + '</p><p class="text-xs text-slate-400">' + formatPrizeMoney(s.total) + '</p></div>';
+                    html += '</div>';
+                });
+                impactEl.innerHTML = html;
+            } else {
+                impactEl.innerHTML = '<p class="text-slate-500 text-sm">Adjust scores and click "Calculate Impact" to see pool standings.</p>';
+            }
         }
 
         function adjustScenario(playerName, delta) {
@@ -4483,7 +4761,8 @@
             let html = '';
             tournamentScores.forEach((p, idx) => {
                 const group = getGolferGroup(p.name);
-                const prize = prizeMap[p.name] || 0;
+                // Use actual earnings from ESPN when available, otherwise projected prize
+                const prize = (hasActualEarnings && p.earnings != null && p.earnings > 0) ? p.earnings : (prizeMap[p.name] || 0);
                 const isCut = p.status === 'cut' || p.status === 'wd' || p.status === 'withdrawn' || p.status === 'disqualified';
 
                 // Score column: show status for cut/wd/dq, otherwise score to par
@@ -4520,9 +4799,9 @@
 
                 const nameExtra = isWildCard ? ' <span style="font-size:0.65rem; color:#c4a35a; font-weight:700; vertical-align:super;">2x</span>' : (isInEntry ? ' <span style="font-size:0.65rem; color:#c4a35a; vertical-align:super;">&#9733;</span>' : '');
 
-                // Score color: red for under par, green for over par, white for even
-                const scoreColor = p.score !== null && p.score < 0 ? '#ef4444' : p.score === 0 ? '#f8fafc' : '#22c55e';
-                const todayColor = p.today !== null && p.today < 0 ? '#ef4444' : p.today === 0 ? '#f8fafc' : '#22c55e';
+                // Score color: green for under par (good), red for over par, white for even
+                const scoreColor = p.score !== null && p.score < 0 ? '#22c55e' : p.score === 0 ? '#f8fafc' : '#ef4444';
+                const todayColor = p.today !== null && p.today < 0 ? '#22c55e' : p.today === 0 ? '#f8fafc' : '#ef4444';
 
                 html += `<tr class="${rowClass}" style="${rowStyle}" data-name="${p.name.toLowerCase()}" data-group="${group}" data-status="${p.status}">
                     <td class="font-bold">${p.pos}</td>

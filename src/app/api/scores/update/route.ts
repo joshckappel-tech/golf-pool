@@ -72,6 +72,17 @@ function parseEspnApiResponse(data: any): any {
       roundDisplay = 'Not Started';
     }
 
+    // ---- Venue / course info ----
+    let courseName: string | null = null;
+    const venue = competition.venue || event.venue;
+    if (venue) {
+      const course = venue.course?.name || venue.fullName || venue.shortName || null;
+      const city = venue.address?.city || null;
+      const state = venue.address?.state || null;
+      const location = [city, state].filter(Boolean).join(', ');
+      courseName = course ? (location ? `${course} — ${location}` : course) : null;
+    }
+
     result.tournament = {
       name: event.name || event.shortName || 'Unknown',
       status: ct.description || '',
@@ -79,6 +90,7 @@ function parseEspnApiResponse(data: any): any {
       roundNumber,
       roundState,
       purse: competition.purse || null,
+      courseName,
     };
 
     // ---- Parse each competitor ----
