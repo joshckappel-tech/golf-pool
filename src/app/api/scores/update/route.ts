@@ -370,36 +370,115 @@ export async function GET(request: Request) {
       }
     }
 
-    // Build ESPN URL — use event-specific scoreboard if we have an event ID
-    const espnUrl = eventId
-      ? `${ESPN_API_URL}?event=${eventId}`
-      : ESPN_API_URL;
+    // When event ID is set, try the summary endpoint first (works for completed tournaments)
+    // Then fall back to scoreboard for current/live tournaments
+    let apiData: any = null;
+    let scores: any = null;
+    let detectedEventId: string | null = null;
 
-    console.log(`[ESPN] Fetching: ${espnUrl}${eventId ? ' (event ID: ' + eventId + ')' : ' (default/current)'}`);
-
-    const response = await fetch(espnUrl, {
-      headers: { 'Accept': 'application/json' },
-      cache: 'no-store',
-    });
-
-    if (!response.ok) {
-      console.log(`ESPN API returned ${response.status}`);
-      return Response.json(await readCachedScores());
+    if (eventId) {
+      // Try scoreboard with event param first
+      console.log(`[ESPN] Trying scoreboard with event ID: ${eventId}`);
+      try {
+        const res = await fetch(`${ESPN_API_URL}?event=${eventId}`, {
+          headers: { 'Accept': 'application/json' }, cache: 'no-store',
+        });
+        if (res.ok) {
+          apiData = await res.json();
+          const parsed = parseEspnApiResponse(apiData);
+          detectedEventId = apiData?.events?.[0]?.id;
+          // Only use this if it actually returned our tournament (not a different one)
+          if (parsed.players.length > 0) {
+            scores = parsed;
+            console.log(`[ESPN] Scoreboard with event ID returned ${parsed.players.length} players`);
+          }
+        }
+      } catch (e) {
+        console.log('[ESPN] Scoreboard with event ID failed:', e);
+      }
     }
 
-    const apiData = await response.json();
-    const scores = parseEspnApiResponse(apiData);
+    // If no event ID or scoreboard didn't return data, use default scoreboard
+    if (!scores) {
+      console.log(`[ESPN] Fetching default scoreboard`);
+      const response = await fetch(ESPN_API_URL, {
+        headers: { 'Accept': 'application/json' }, cache: 'no-store',
+      });
+      if (!response.ok) {
+        console.log(`ESPN API returned ${response.status}`);
+        return Response.json(await readCachedScores());
+      }
+      apiData = await response.json();
+      scores = parseEspnApiResponse(apiData);
+      detectedEventId = apiData?.events?.[0]?.id;
+    }
 
-    // Save the detected event ID for future use
-    const detectedEventId = apiData?.events?.[0]?.id;
     if (detectedEventId && scores.tournament) {
       scores.tournament.eventId = detectedEventId;
+    }
+
+    // If we have an event ID but the scoreboard returned a DIFFERENT tournament,
+    // use the summary endpoint as primary data source
+    const scoreboardEventId = detectedEventId;
+    const targetEventId = eventId || detectedEventId;
+    if (eventId && scoreboardEventId && scoreboardEventId !== eventId) {
+      console.log(`[ESPN] Scoreboard returned different event (${scoreboardEventId}). Trying summary for ${eventId}...`);
+      try {
+        const summaryRes = await fetch(
+          `https://site.api.espn.com/apis/site/v2/sports/golf/pga/summary?event=${eventId}`,
+          { headers: { 'Accept': 'application/json' }, cache: 'no-store' }
+        );
+        if (summaryRes.ok) {
+          const summary = await summaryRes.json();
+          // Re-parse competitors from the summary
+          const summaryComps = summary.competitions?.[0]?.competitors
+            || summary.event?.competitions?.[0]?.competitors || [];
+          if (summaryComps.length > 0) {
+            console.log(`[ESPN] Summary returned ${summaryComps.length} competitors for event ${eventId}`);
+            // Build a fake scoreboard-like structure and re-parse
+            const fakeData = {
+              events: [{
+                id: eventId,
+                name: summary.event?.name || summary.header?.competitions?.[0]?.competitors ? 'Tournament' : 'Unknown',
+                shortName: summary.event?.shortName,
+                competitions: summary.competitions || summary.event?.competitions || [{
+                  status: summary.header?.competitions?.[0]?.status || {},
+                  competitors: summaryComps,
+                  purse: summary.event?.purse,
+                  venue: summary.event?.venue,
+                  courses: summary.courses,
+                }],
+              }],
+            };
+            // Use event name from header or event
+            if (summary.header?.competitions?.[0]) {
+              const hc = summary.header.competitions[0];
+              fakeData.events[0].name = summary.event?.name || hc.name || 'Tournament';
+              if (!fakeData.events[0].competitions[0].status?.type) {
+                fakeData.events[0].competitions[0].status = hc.status || {};
+              }
+              if (!fakeData.events[0].competitions[0].purse && hc.purse) {
+                fakeData.events[0].competitions[0].purse = hc.purse;
+              }
+            }
+            const summaryScores = parseEspnApiResponse(fakeData);
+            if (summaryScores.players.length > 0) {
+              scores = summaryScores;
+              scores.tournament.eventId = eventId;
+              apiData = fakeData;
+              console.log(`[ESPN] Using summary data: ${scores.players.length} players, tournament: ${scores.tournament?.name}`);
+            }
+          }
+        }
+      } catch (e) {
+        console.log('[ESPN] Summary as primary source failed:', e);
+      }
     }
 
     // Always try the ESPN event summary endpoint for rich tournament metadata
     if (scores.tournament) {
       try {
-        const summaryEventId = eventId || detectedEventId;
+        const summaryEventId = targetEventId;
         if (summaryEventId) {
           const summaryRes = await fetch(
             `https://site.api.espn.com/apis/site/v2/sports/golf/pga/summary?event=${summaryEventId}`,
