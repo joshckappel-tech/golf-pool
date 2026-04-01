@@ -1141,6 +1141,7 @@
                         <button class="admin-tab-button pb-3 px-3" style="font-size:0.85rem; white-space:nowrap;" onclick="switchAdminTab('entries')">Entries</button>
                         <button class="admin-tab-button pb-3 px-3" style="font-size:0.85rem; white-space:nowrap;" onclick="switchAdminTab('accounts')">Accounts</button>
                         <button class="admin-tab-button pb-3 px-3" style="font-size:0.85rem; white-space:nowrap;" onclick="switchAdminTab('stats')">Stats</button>
+                        <button class="admin-tab-button pb-3 px-3" style="font-size:0.85rem; white-space:nowrap;" onclick="switchAdminTab('archives')">Past Pools</button>
                     </div>
                 </div>
 
@@ -1391,6 +1392,40 @@
                 </div>
 
                 <!-- Stats -->
+                <!-- Past Pools Archive -->
+                <div id="admin-archives" class="admin-tab-pane hidden">
+                    <h3 class="text-xl font-bold mb-4">Past Pools</h3>
+                    <p class="text-sm text-slate-400 mb-4">View archived pool results from prior tournaments. Pools are archived when you switch tournaments on the Tournament tab.</p>
+                    <div id="archive-list" class="space-y-3">
+                        <p class="text-xs text-slate-500">Loading archives...</p>
+                    </div>
+                    <div id="archive-detail" class="mt-6 hidden">
+                        <div class="flex items-center gap-3 mb-4">
+                            <button class="text-sm px-3 py-1.5 rounded" style="background:rgba(100,116,139,0.2); border:1px solid rgba(100,116,139,0.3); color:#94a3b8;" onclick="closeArchiveDetail()">← Back to All</button>
+                            <h4 class="text-lg font-bold" id="archive-detail-title"></h4>
+                        </div>
+                        <div class="leaderboard-scroll">
+                            <table class="leaderboard-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width:50px;">Rank</th>
+                                        <th style="width:140px;">Entrant</th>
+                                        <th style="width:120px;">Group A</th>
+                                        <th style="width:120px;">Group B</th>
+                                        <th style="width:120px;">Group C</th>
+                                        <th style="width:120px;">Group D</th>
+                                        <th style="width:140px;">Wild Card 1</th>
+                                        <th style="width:140px;">Wild Card 2</th>
+                                        <th style="width:100px;">Total</th>
+                                        <th style="width:100px;">Payout</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="archive-detail-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
                 <div id="admin-stats" class="admin-tab-pane hidden">
                     <h3 class="text-xl font-bold mb-6">Tournament Statistics</h3>
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -2510,6 +2545,7 @@
             if (tabName === 'entries') loadAdminEntries();
             if (tabName === 'accounts') loadAdminUsers();
             if (tabName === 'stats') loadAdminStats();
+            if (tabName === 'archives') { loadArchiveList(); closeArchiveDetail(); }
         }
 
         // =====================================================
@@ -4329,18 +4365,94 @@
                 const data = await res.json();
                 const archives = data.archives || [];
                 if (archives.length === 0) {
-                    container.innerHTML = '<p class="text-xs text-slate-500">No past tournaments archived yet.</p>';
+                    container.innerHTML = '<p class="text-sm text-slate-500">No past tournaments archived yet. When you switch tournaments on the Tournament tab, your current entries will be archived here.</p>';
                     return;
                 }
-                container.innerHTML = archives.map(a =>
-                    '<div class="flex justify-between items-center p-2 rounded" style="background:rgba(255,255,255,0.03);">' +
-                        '<div><p class="font-bold text-xs">' + (a.tournamentName || a.tournamentKey) + '</p>' +
-                        '<p class="text-xs text-slate-500">' + a.entryCount + ' entries &middot; ' + new Date(a.archivedAt).toLocaleDateString() + '</p></div>' +
-                    '</div>'
-                ).join('');
+                container.innerHTML = archives.map(a => {
+                    const dateStr = a.archivedAt ? new Date(a.archivedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+                    return '<div class="stat-card flex justify-between items-center cursor-pointer" style="padding:12px 16px;" onclick="loadArchiveDetail(\'' + (a.tournamentKey || '').replace(/'/g, "\\'") + '\', \'' + (a.tournamentName || a.tournamentKey || '').replace(/'/g, "\\'") + '\')">' +
+                        '<div>' +
+                            '<p class="font-bold text-sm" style="color:#c4a35a;">' + (a.tournamentName || a.tournamentKey) + '</p>' +
+                            '<p class="text-xs text-slate-500 mt-1">' + (a.entryCount || 0) + ' entries' + (dateStr ? ' · Archived ' + dateStr : '') + '</p>' +
+                        '</div>' +
+                        '<span class="text-slate-500 text-sm">View →</span>' +
+                    '</div>';
+                }).join('');
             } catch (e) {
                 container.innerHTML = '<p class="text-xs text-slate-500">Failed to load archives.</p>';
             }
+        }
+
+        async function loadArchiveDetail(tournamentKey, tournamentName) {
+            const listEl = document.getElementById('archive-list');
+            const detailEl = document.getElementById('archive-detail');
+            const titleEl = document.getElementById('archive-detail-title');
+            const tbody = document.getElementById('archive-detail-body');
+            if (!detailEl || !tbody) return;
+
+            listEl.style.display = 'none';
+            detailEl.classList.remove('hidden');
+            titleEl.textContent = tournamentName || tournamentKey;
+            tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:20px;color:#94a3b8;">Loading entries...</td></tr>';
+
+            try {
+                const res = await fetch('/api/entries/archive?tournament=' + encodeURIComponent(tournamentKey));
+                if (!res.ok) {
+                    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:20px;color:#ef4444;">Archive not found.</td></tr>';
+                    return;
+                }
+                const archive = await res.json();
+                const entries = archive.entries || [];
+                if (entries.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:20px;color:#94a3b8;">No entries in this archive.</td></tr>';
+                    return;
+                }
+
+                // Sort entries by total earnings descending (if available) or by name
+                const sorted = [...entries].sort((a, b) => {
+                    const totalA = (a.totalEarnings || a.poolTotal || 0);
+                    const totalB = (b.totalEarnings || b.poolTotal || 0);
+                    if (totalA !== totalB) return totalB - totalA;
+                    return (a.entryName || a.name || '').localeCompare(b.entryName || b.name || '');
+                });
+
+                tbody.innerHTML = sorted.map((entry, idx) => {
+                    const name = entry.entryName || entry.name || 'Unknown';
+                    const pickA = entry.groupA || entry.pickGroupA || '—';
+                    const pickB = entry.groupB || entry.pickGroupB || '—';
+                    const pickC = entry.groupC || entry.pickGroupC || '—';
+                    const pickD = entry.groupD || entry.pickGroupD || '—';
+                    const wc1 = entry.wildcard1 || entry.pickWC1 || '—';
+                    const wc2 = entry.wildcard2 || entry.pickWC2 || '—';
+                    const total = entry.totalEarnings || entry.poolTotal || null;
+                    const totalDisplay = total != null ? '$' + Number(total).toLocaleString() : '—';
+                    const payout = entry.payout || null;
+                    const payoutDisplay = payout != null && payout > 0 ? '<span style="color:#c4a35a;font-weight:bold;">$' + Number(payout).toLocaleString() + '</span>' : '—';
+                    const rankBadge = idx < 3 ? (idx === 0 ? 'rank-1-badge' : 'rank-2-badge') : 'rank-3-badge';
+
+                    return '<tr>' +
+                        '<td><span class="rank-badge ' + rankBadge + '">' + (idx + 1) + '</span></td>' +
+                        '<td class="font-semibold">' + name + '</td>' +
+                        '<td class="text-xs">' + pickA + '</td>' +
+                        '<td class="text-xs">' + pickB + '</td>' +
+                        '<td class="text-xs">' + pickC + '</td>' +
+                        '<td class="text-xs">' + pickD + '</td>' +
+                        '<td class="text-xs">' + wc1 + '</td>' +
+                        '<td class="text-xs">' + wc2 + '</td>' +
+                        '<td class="font-semibold">' + totalDisplay + '</td>' +
+                        '<td>' + payoutDisplay + '</td>' +
+                    '</tr>';
+                }).join('');
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:20px;color:#ef4444;">Failed to load archive: ' + e.message + '</td></tr>';
+            }
+        }
+
+        function closeArchiveDetail() {
+            const listEl = document.getElementById('archive-list');
+            const detailEl = document.getElementById('archive-detail');
+            if (listEl) listEl.style.display = '';
+            if (detailEl) detailEl.classList.add('hidden');
         }
 
         // Submit entry: save picks, then prompt payment via Cheddar Up
