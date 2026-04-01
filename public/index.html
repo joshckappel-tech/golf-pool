@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Back 9 Golf Pools</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -20,6 +20,13 @@
             background-attachment: fixed;
             color: var(--text-light);
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+
+        /* Prevent iOS Safari auto-zoom on input focus (requires font-size >= 16px) */
+        @media screen and (max-width: 768px) {
+            input, select, textarea {
+                font-size: 16px !important;
+            }
         }
 
         .tab-pane {
@@ -895,6 +902,12 @@
                     </div>
                     <!-- Not started message (hidden by default) -->
                     <div id="tournament-not-started" style="display:none;"></div>
+                    <!-- Entries-open locked message (hidden by default) -->
+                    <div id="tournament-entries-open" style="display:none; text-align:center; padding:60px 20px;">
+                        <div style="font-size:3rem; margin-bottom:16px;">&#9971;</div>
+                        <h3 style="font-size:1.4rem; font-weight:700; color:#e2e8f0; margin-bottom:8px;">Tournament Leaderboard Coming Soon</h3>
+                        <p style="color:#94a3b8; font-size:1rem;">The leaderboard will be available once entries close and the pool goes live.</p>
+                    </div>
                     <div id="tournament-leaderboard-content">
                     <div id="tournamentInfoBar" style="margin-bottom:12px; padding:8px 12px; background:rgba(255,255,255,0.05); border-radius:8px; font-size:0.9rem; color:#e2e8f0;"></div>
                     <!-- Entry Selector -->
@@ -2745,35 +2758,15 @@
             const isLive = isPoolLive();
             const isOpen = isEntriesOpen();
 
-            if (!isLive && !isOpen && !isAdminUser) {
-                // Closed — fully locked
+            if (isOpen && !isAdminUser) {
+                // Entries Open — hide leaderboard entirely
                 if (lockedEl) lockedEl.style.display = 'block';
                 if (contentEl) contentEl.style.display = 'none';
                 return;
-            } else if (isOpen && !isAdminUser) {
-                // Entries Open — show entrant names only (no picks)
-                if (lockedEl) lockedEl.style.display = 'none';
-                if (contentEl) contentEl.style.display = '';
-                // Show names-only view
-                let entries = [];
-                try {
-                    const res = await fetch('/api/entries');
-                    if (res.ok) entries = await res.json();
-                } catch (e) {}
-                const paidEntries = entries.filter(e => e.paymentStatus === 'paid' && e.entryStatus !== 'rejected');
-                const statusEl = document.querySelector('#leaderboard .status-badge');
-                if (statusEl) {
-                    statusEl.textContent = paidEntries.length + ' Entries — Picks Hidden Until Live';
-                    statusEl.className = 'status-badge status-setup';
-                }
-                if (paidEntries.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:20px; color:#94a3b8;">No entries submitted yet. Be the first to enter!</td></tr>';
-                } else {
-                    tbody.innerHTML = paidEntries.map((e, i) => {
-                        const name = e.entryName || e.name || 'Unknown';
-                        return '<tr><td><span class="rank-badge rank-3-badge">' + (i + 1) + '</span></td><td>' + name + '</td><td colspan="9" style="text-align:center; color:#64748b; font-style:italic;">Picks revealed when pool goes live</td></tr>';
-                    }).join('');
-                }
+            } else if (!isLive && !isOpen && !isAdminUser) {
+                // Closed — fully locked
+                if (lockedEl) lockedEl.style.display = 'block';
+                if (contentEl) contentEl.style.display = 'none';
                 return;
             } else {
                 if (lockedEl) lockedEl.style.display = 'none';
@@ -4288,12 +4281,33 @@
 
                 if (doArchive) {
                     try {
+                        // Include final standings so earnings/payouts are preserved
+                        const finalStandings = (leaderboardData || []).map(s => ({
+                            rank: s.rank,
+                            name: s.name,
+                            groupA: s.groupA?.golfer || '',
+                            groupAAmount: s.groupA?.amount || 0,
+                            groupB: s.groupB?.golfer || '',
+                            groupBAmount: s.groupB?.amount || 0,
+                            groupC: s.groupC?.golfer || '',
+                            groupCAmount: s.groupC?.amount || 0,
+                            groupD: s.groupD?.golfer || '',
+                            groupDAmount: s.groupD?.amount || 0,
+                            wc1: s.wc1?.golfer || '',
+                            wc1Amount: s.wc1?.amount || 0,
+                            wc2: s.wc2?.golfer || '',
+                            wc2Amount: s.wc2?.amount || 0,
+                            total: s.total || 0,
+                            tb: s.tb,
+                            payout: s.payout || 0,
+                        }));
                         const archRes = await fetch('/api/entries/archive', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 tournamentKey: oldTournamentKey,
                                 tournamentName: oldName,
+                                standings: finalStandings,
                             }),
                         });
                         const archData = await archRes.json();
@@ -4402,45 +4416,74 @@
                     return;
                 }
                 const archive = await res.json();
+
+                // Prefer saved standings (with earnings/payouts) if available
+                if (archive.standings && archive.standings.length > 0) {
+                    const standings = archive.standings;
+                    tbody.innerHTML = standings.map(s => {
+                        const rank = s.rank || '—';
+                        const rankNum = parseInt(rank) || 999;
+                        const rankBadge = rankNum <= 3 ? (rankNum === 1 ? 'rank-1-badge' : rankNum === 2 ? 'rank-2-badge' : 'rank-3-badge') : '';
+                        const fmtAmt = (v) => v ? '$' + Number(v).toLocaleString() : '—';
+                        const pickCell = (name, amt) => {
+                            if (!name) return '<td class="text-xs">—</td>';
+                            const amtStr = amt ? ' <span style="color:#94a3b8;font-size:0.65rem;">(' + fmtAmt(amt) + ')</span>' : '';
+                            return '<td class="text-xs">' + name + amtStr + '</td>';
+                        };
+                        return '<tr>' +
+                            '<td>' + (rankBadge ? '<span class="rank-badge ' + rankBadge + '">' + rank + '</span>' : rank) + '</td>' +
+                            '<td class="font-semibold">' + (s.name || '—') + '</td>' +
+                            pickCell(s.groupA, s.groupAAmount) +
+                            pickCell(s.groupB, s.groupBAmount) +
+                            pickCell(s.groupC, s.groupCAmount) +
+                            pickCell(s.groupD, s.groupDAmount) +
+                            pickCell(s.wc1, s.wc1Amount) +
+                            pickCell(s.wc2, s.wc2Amount) +
+                            '<td class="font-semibold" style="color:#22c55e;">' + fmtAmt(s.total) + '</td>' +
+                            '<td class="font-semibold" style="color:#facc15;">' + fmtAmt(s.payout) + '</td>' +
+                        '</tr>';
+                    }).join('');
+                    return;
+                }
+
+                // Fallback: reconstruct from raw entries (no earnings data)
                 const entries = archive.entries || [];
                 if (entries.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:20px;color:#94a3b8;">No entries in this archive.</td></tr>';
                     return;
                 }
 
-                // Sort entries by total earnings descending (if available) or by name
-                const sorted = [...entries].sort((a, b) => {
-                    const totalA = (a.totalEarnings || a.poolTotal || 0);
-                    const totalB = (b.totalEarnings || b.poolTotal || 0);
-                    if (totalA !== totalB) return totalB - totalA;
-                    return (a.entryName || a.name || '').localeCompare(b.entryName || b.name || '');
-                });
+                const archiveStandings = entries.map(entry => {
+                    const pickA = entry.groupA || entry.pickGroupA || '';
+                    const pickB = entry.groupB || entry.pickGroupB || '';
+                    const pickC = entry.groupC || entry.pickGroupC || '';
+                    const pickD = entry.groupD || entry.pickGroupD || '';
+                    const wc1 = entry.wildCard1 || entry.wc1 || '';
+                    const wc2 = entry.wildCard2 || entry.wc2 || '';
+                    return {
+                        name: entry.entryName || entry.name || entry.entrantName || 'Unknown',
+                        pickA, pickB, pickC, pickD, wc1, wc2,
+                        paid: entry.paid !== false,
+                        tb: entry.tiebreaker !== undefined ? entry.tiebreaker : null,
+                    };
+                }).filter(e => e.paid);
+
+                const sorted = archiveStandings.sort((a, b) => a.name.localeCompare(b.name));
 
                 tbody.innerHTML = sorted.map((entry, idx) => {
-                    const name = entry.entryName || entry.name || 'Unknown';
-                    const pickA = entry.groupA || entry.pickGroupA || '—';
-                    const pickB = entry.groupB || entry.pickGroupB || '—';
-                    const pickC = entry.groupC || entry.pickGroupC || '—';
-                    const pickD = entry.groupD || entry.pickGroupD || '—';
-                    const wc1 = entry.wildcard1 || entry.pickWC1 || '—';
-                    const wc2 = entry.wildcard2 || entry.pickWC2 || '—';
-                    const total = entry.totalEarnings || entry.poolTotal || null;
-                    const totalDisplay = total != null ? '$' + Number(total).toLocaleString() : '—';
-                    const payout = entry.payout || null;
-                    const payoutDisplay = payout != null && payout > 0 ? '<span style="color:#c4a35a;font-weight:bold;">$' + Number(payout).toLocaleString() + '</span>' : '—';
                     const rankBadge = idx < 3 ? (idx === 0 ? 'rank-1-badge' : 'rank-2-badge') : 'rank-3-badge';
 
                     return '<tr>' +
                         '<td><span class="rank-badge ' + rankBadge + '">' + (idx + 1) + '</span></td>' +
-                        '<td class="font-semibold">' + name + '</td>' +
-                        '<td class="text-xs">' + pickA + '</td>' +
-                        '<td class="text-xs">' + pickB + '</td>' +
-                        '<td class="text-xs">' + pickC + '</td>' +
-                        '<td class="text-xs">' + pickD + '</td>' +
-                        '<td class="text-xs">' + wc1 + '</td>' +
-                        '<td class="text-xs">' + wc2 + '</td>' +
-                        '<td class="font-semibold">' + totalDisplay + '</td>' +
-                        '<td>' + payoutDisplay + '</td>' +
+                        '<td class="font-semibold">' + entry.name + '</td>' +
+                        '<td class="text-xs">' + (entry.pickA || '—') + '</td>' +
+                        '<td class="text-xs">' + (entry.pickB || '—') + '</td>' +
+                        '<td class="text-xs">' + (entry.pickC || '—') + '</td>' +
+                        '<td class="text-xs">' + (entry.pickD || '—') + '</td>' +
+                        '<td class="text-xs">' + (entry.wc1 || '—') + '</td>' +
+                        '<td class="text-xs">' + (entry.wc2 || '—') + '</td>' +
+                        '<td>—</td>' +
+                        '<td>—</td>' +
                     '</tr>';
                 }).join('');
             } catch (e) {
@@ -4927,6 +4970,18 @@
         function renderTournamentLeaderboard() {
             const tbody = document.getElementById('tournamentLeaderboardBody');
             if (!tbody) return;
+
+            // Hide leaderboard when entries are open (non-admin)
+            const entriesOpenEl = document.getElementById('tournament-entries-open');
+            const leaderboardContentEl = document.getElementById('tournament-leaderboard-content');
+            if (isEntriesOpen() && !isAdminUser) {
+                if (entriesOpenEl) entriesOpenEl.style.display = 'block';
+                if (leaderboardContentEl) leaderboardContentEl.style.display = 'none';
+                return;
+            } else {
+                if (entriesOpenEl) entriesOpenEl.style.display = 'none';
+                if (leaderboardContentEl) leaderboardContentEl.style.display = '';
+            }
 
             // Load entries for the highlight selector
             loadEntrySelector();
