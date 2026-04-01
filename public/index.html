@@ -790,11 +790,11 @@
                 <div class="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8">
                     <div class="tab-nav-inner">
                         <button class="tab-button active" onclick="switchTab('home')">Home</button>
+                        <button class="tab-button" id="entry-tab-btn" onclick="switchTab('entry')">Entry Form</button>
+                        <button class="tab-button hidden" id="my-entries-tab" onclick="switchTab('myentries')">My Entries</button>
                         <button class="tab-button" onclick="switchTab('tournament')">Tournament</button>
                         <button class="tab-button" onclick="switchTab('leaderboard')">Pool Standings</button>
                         <button class="tab-button" onclick="switchTab('analytics')">Analytics</button>
-                        <button class="tab-button" onclick="switchTab('entry')">Entry Form</button>
-                        <button class="tab-button hidden" id="my-entries-tab" onclick="switchTab('myentries')">My Entries</button>
                         <button class="tab-button" onclick="switchTab('scenario')">Scenarios</button>
                         <button class="tab-button hidden" id="admin-tab-btn" onclick="switchTab('admin')">Admin</button>
                     </div>
@@ -1126,6 +1126,12 @@
 
             <!-- ANALYTICS TAB -->
             <div id="analytics" class="tab-pane">
+                <div id="analytics-entries-open" style="display:none; text-align:center; padding:60px 20px;">
+                    <div style="font-size:3rem; margin-bottom:16px;">&#128202;</div>
+                    <h3 style="font-size:1.4rem; font-weight:700; color:#e2e8f0; margin-bottom:8px;">Analytics Coming Soon</h3>
+                    <p style="color:#94a3b8; font-size:1rem;">Pick distribution analytics will be available once entries close and the pool goes live.</p>
+                </div>
+                <div id="analytics-content">
                 <div class="mb-6">
                     <h2 class="text-2xl sm:text-3xl font-bold mb-2">Pick Distribution Analytics</h2>
                     <p class="text-slate-400 text-sm">See how picks are distributed across each group and compare your selections.</p>
@@ -1139,6 +1145,7 @@
                 <div id="analytics-charts" class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 </div>
                 <div id="analytics-comparison" class="mt-6" style="display:none;">
+                </div>
                 </div>
             </div>
 
@@ -2460,6 +2467,7 @@
                 }
                 // Update home stats AFTER settings are loaded so entry fee is correct
                 updateHomeStats();
+                updateTabVisibility();
                 initTournamentSelector();
                 loadArchiveList();
             }).catch(() => {
@@ -3109,6 +3117,17 @@
         let analyticsEntries = [];
 
         async function loadAnalyticsData() {
+            // Hide analytics when entries are open (non-admin)
+            const analyticsLockedEl = document.getElementById('analytics-entries-open');
+            const analyticsContentEl = document.getElementById('analytics-content');
+            if (isEntriesOpen() && !isAdminUser) {
+                if (analyticsLockedEl) analyticsLockedEl.style.display = 'block';
+                if (analyticsContentEl) analyticsContentEl.style.display = 'none';
+                return;
+            } else {
+                if (analyticsLockedEl) analyticsLockedEl.style.display = 'none';
+                if (analyticsContentEl) analyticsContentEl.style.display = '';
+            }
             try {
                 const res = await fetch('/api/entries');
                 if (res.ok) {
@@ -4354,6 +4373,7 @@
                     // Sync entry fee across site
                     onEntryFeeChange();
                     updateHomeStats();
+                    updateTabVisibility();
                     alert('Settings saved!');
                     // If ESPN Event ID changed, re-fetch scores from the new tournament
                     const newEventId = settings.espnEventId || '';
@@ -5205,6 +5225,7 @@
             // Pool status dropdown
             const statusEl = document.getElementById('admin-pool-status');
             if (statusEl && poolSettings.poolStatus) statusEl.value = poolSettings.poolStatus;
+            updateTabVisibility();
 
             // ESPN Event ID
             const eventIdEl = document.getElementById('admin-espn-event-id');
@@ -5646,6 +5667,23 @@
 
         function isEntriesOpen() {
             return getPoolStatus() === 'entries_open';
+        }
+
+        // Show/hide tabs based on pool status
+        function updateTabVisibility() {
+            const entryTabBtn = document.getElementById('entry-tab-btn');
+            if (entryTabBtn) {
+                if (isPoolLive()) {
+                    entryTabBtn.classList.add('hidden');
+                    // If user is currently on the entry tab, redirect to home
+                    const entryPane = document.getElementById('entry');
+                    if (entryPane && entryPane.classList.contains('active')) {
+                        switchTab('home');
+                    }
+                } else {
+                    entryTabBtn.classList.remove('hidden');
+                }
+            }
         }
 
         // Check if a specific entry can be edited by the participant
