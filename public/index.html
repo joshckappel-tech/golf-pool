@@ -3271,7 +3271,7 @@
                     const isEditable = entry.editable === true;
                     const isRejected = entry.entryStatus === 'rejected';
                     const entryId = entry.id || i;
-                    const canReject = isEntriesOpen();
+                    const canReject = true; // Admin can always change entry status
                     const rowStyle = isRejected ? ' style="opacity:0.5;"' : '';
 
                     html += `<tr${rowStyle}>
