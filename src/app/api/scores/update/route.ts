@@ -726,15 +726,9 @@ function parseEspnApiResponse(data: any): any {
     }
 
     // === DERIVE POSITIONS ===
-    // Sort by score (ascending = best first), then by totalStrokes
-    parsed.sort((a, b) => {
-      if (a._sortScore !== b._sortScore) return a._sortScore - b._sortScore;
-      return (a.totalStrokes || 999) - (b.totalStrokes || 999);
-    });
-
-    // Assign positions with tie handling
-    // Active players get positions, cut/wd/dq get their status as position
-    let currentPos = 1;
+    // ESPN scoreboard returns competitors already in correct leaderboard order.
+    // DO NOT re-sort — preserve ESPN's exact order (including their tiebreakers).
+    // Just assign position labels based on the order ESPN gave us.
     for (let i = 0; i < parsed.length; i++) {
       const p = parsed[i];
       if (p.status !== 'active') {
@@ -742,34 +736,57 @@ function parseEspnApiResponse(data: any): any {
         continue;
       }
 
-      // Check for ties: look at players with the same score
-      if (i > 0 && parsed[i - 1].status === 'active' && parsed[i - 1].score === p.score) {
-        // Same score as previous = tied, use same position
-        p.pos = parsed[i - 1].pos;
-      } else {
-        // Count how many active players before this one
-        let activeCount = 0;
-        for (let j = 0; j < i; j++) {
-          if (parsed[j].status === 'active') activeCount++;
-        }
-        const posNum = activeCount + 1;
+      // Count active players before this one to determine position
+      let activeCount = 0;
+      for (let j = 0; j < i; j++) {
+        if (parsed[j].status === 'active') activeCount++;
+      }
+      const posNum = activeCount + 1;
 
-        // Check if next player has the same score (tie)
-        let isTied = false;
+      // Check if tied with adjacent active players (same score)
+      let isTied = false;
+      // Check previous active player
+      for (let j = i - 1; j >= 0; j--) {
+        if (parsed[j].status === 'active') {
+          if (parsed[j].score === p.score) isTied = true;
+          break;
+        }
+      }
+      // Check next active player
+      if (!isTied) {
         for (let j = i + 1; j < parsed.length; j++) {
-          if (parsed[j].status === 'active' && parsed[j].score === p.score) {
-            isTied = true;
+          if (parsed[j].status === 'active') {
+            if (parsed[j].score === p.score) isTied = true;
             break;
           }
         }
-        p.pos = isTied ? `T${posNum}` : `${posNum}`;
+      }
+
+      // For tied players, use the first player's position number
+      if (isTied) {
+        // Find the first active player with this same score
+        let firstPosNum = posNum;
+        for (let j = 0; j < i; j++) {
+          if (parsed[j].status === 'active' && parsed[j].score === p.score) {
+            // Extract position number from the first tied player
+            const prevPos = parsed[j].pos;
+            if (prevPos) {
+              firstPosNum = parseInt(prevPos.replace('T', ''), 10) || posNum;
+            }
+            break;
+          }
+        }
+        p.pos = `T${firstPosNum}`;
+      } else {
+        p.pos = `${posNum}`;
       }
     }
 
-    // Remove internal sort field, add espnOrder based on sorted position
+    // Preserve ESPN's exact array order — assign espnOrder as sequential index
     result.players = parsed.map(({ _sortScore, ...rest }, idx) => ({ ...rest, espnOrder: idx + 1 }));
 
-    console.log(`Parsed ${result.players.length} players. Round ${roundNumber} (${roundState}). Top: ${result.players[0]?.name} ${result.players[0]?.pos} ${result.players[0]?.score}`);
+    const top5sb = result.players.slice(0, 5).map((p: any) => `#${p.espnOrder} ${p.pos} ${p.name} (${p.score}, thru:${p.thru})`).join(' | ');
+    console.log(`[ESPN Scoreboard] Parsed ${result.players.length} players. Round ${roundNumber} (${roundState}). Top 5: ${top5sb}`);
 
   } catch (err) {
     console.error('Error parsing ESPN API response:', err);
@@ -810,40 +827,61 @@ export async function GET(request: Request) {
     let scores: any = null;
 
     // STRATEGY:
-    // When an ESPN Event ID is configured, use the Core API endpoint which
-    // is the ONLY endpoint that works for specific completed tournaments.
-    // The regular scoreboard endpoint ignores the event parameter for golf.
-    if (eventId) {
-      console.log(`[ESPN] Event ID configured: ${eventId}. Using Core API...`);
+    // 1. ALWAYS try the scoreboard API first — it returns players in correct
+    //    live leaderboard order and updates in real-time during tournaments.
+    // 2. If the scoreboard has data for the configured event, use it.
+    // 3. Only fall back to Core API for completed/historical tournaments where
+    //    the scoreboard no longer has the data.
+    //
+    // This is critical because the Core API's competitor list order and position
+    // fields can be stale during live play, causing incorrect leaderboard order.
+
+    // Step 1: Try scoreboard API (works best for live/current tournaments)
+    let scoreboardData: any = null;
+    try {
+      console.log(`[ESPN] Fetching scoreboard API...`);
+      const response = await fetch(ESPN_API_URL, {
+        headers: { 'Accept': 'application/json' }, cache: 'no-store',
+      });
+      if (response.ok) {
+        scoreboardData = await response.json();
+        const scoreboardEventId = scoreboardData?.events?.[0]?.id;
+        console.log(`[ESPN] Scoreboard event: ${scoreboardEventId}, configured: ${eventId}`);
+
+        // Use scoreboard if it matches our configured event OR if no event configured
+        if (!eventId || (scoreboardEventId && String(scoreboardEventId) === String(eventId))) {
+          scores = parseEspnApiResponse(scoreboardData);
+          if (scores && scores.players.length > 0) {
+            if (scoreboardEventId && scores.tournament) {
+              scores.tournament.eventId = scoreboardEventId;
+            }
+            console.log(`[ESPN] Scoreboard API success: ${scores.players.length} players, tournament: ${scores.tournament?.name}`);
+          } else {
+            console.log(`[ESPN] Scoreboard returned no players`);
+            scores = null;
+          }
+        } else {
+          console.log(`[ESPN] Scoreboard event ${scoreboardEventId} doesn't match configured ${eventId}, skipping`);
+        }
+      }
+    } catch (e) {
+      console.log(`[ESPN] Scoreboard API failed:`, e);
+    }
+
+    // Step 2: Fall back to Core API (for historical/completed tournaments not on scoreboard)
+    if (!scores && eventId) {
+      console.log(`[ESPN] Using Core API for event ${eventId}...`);
       try {
         scores = await fetchFromCoreApi(eventId);
         if (scores && scores.players.length > 0) {
           console.log(`[ESPN] Core API success: ${scores.players.length} players, tournament: ${scores.tournament?.name}`);
         } else {
-          console.log(`[ESPN] Core API returned no players, falling back to scoreboard`);
+          console.log(`[ESPN] Core API returned no players`);
           scores = null;
         }
       } catch (e) {
         console.log(`[ESPN] Core API failed:`, e);
         scores = null;
-      }
-    }
-
-    // Fallback: use default scoreboard (for current/live tournaments or if no event ID)
-    if (!scores) {
-      console.log(`[ESPN] Fetching default scoreboard`);
-      const response = await fetch(ESPN_API_URL, {
-        headers: { 'Accept': 'application/json' }, cache: 'no-store',
-      });
-      if (!response.ok) {
-        console.log(`ESPN API returned ${response.status}`);
-        return Response.json(await readCachedScores());
-      }
-      const apiData = await response.json();
-      scores = parseEspnApiResponse(apiData);
-      const detectedEventId = apiData?.events?.[0]?.id;
-      if (detectedEventId && scores.tournament) {
-        scores.tournament.eventId = detectedEventId;
       }
     }
 
