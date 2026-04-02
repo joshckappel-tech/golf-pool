@@ -3346,10 +3346,10 @@
 
                 const headers = rows[0].map(h => h.trim().toLowerCase());
                 // Try to find relevant columns — flexible matching for CheddarUp exports
-                const nameCol = headers.findIndex(h => h === 'name' || h === 'payer name' || h === 'full name' || h === 'buyer name' || h === 'first name');
+                const nameCol = headers.findIndex(h => h === 'respondent' || h === 'name' || h === 'payer name' || h === 'full name' || h === 'buyer name' || h === 'first name');
                 const lastNameCol = headers.findIndex(h => h === 'last name' || h === 'last');
                 const emailCol = headers.findIndex(h => h.includes('email'));
-                const entryNameCol = headers.findIndex(h => h === 'entry name' || h === 'entry_name' || h === 'entryname');
+                const entryNameCol = headers.findIndex(h => h.includes('entry name') || h === 'entry_name' || h === 'entryname');
                 // CheddarUp custom fields often appear as form response columns
                 const itemCol = headers.findIndex(h => h === 'item' || h === 'item name' || h === 'product');
                 const statusCol = headers.findIndex(h => h === 'status' || h === 'payment status' || h === 'order status');
