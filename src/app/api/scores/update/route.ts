@@ -415,24 +415,15 @@ async function fetchFromCoreApi(eventId: string): Promise<any> {
     }
   }
 
-  // Sort by ESPN official position first, then by score as fallback
-  const parsePosNum = (pos: string | null): number => {
-    if (!pos) return 9999;
-    const n = parseInt(pos.replace(/^T/, ''), 10);
-    return isNaN(n) ? 9999 : n;
-  };
+  // Sort using ESPN's competitor order — this is the exact leaderboard sequence from ESPN
+  // It already handles ties, cut ordering, etc. correctly
   parsed.sort((a, b) => {
-    // Active players come first
+    // ESPN order is the definitive leaderboard position (1, 2, 3, ...)
+    if (a._order !== b._order) return a._order - b._order;
+    // Fallback if order is missing: active first, then by score
     const aActive = a.status === 'active' ? 0 : 1;
     const bActive = b.status === 'active' ? 0 : 1;
     if (aActive !== bActive) return aActive - bActive;
-    // Use ESPN position as primary sort (handles tiebreakers correctly)
-    const aPosNum = parsePosNum(a.pos);
-    const bPosNum = parsePosNum(b.pos);
-    if (aPosNum !== bPosNum) return aPosNum - bPosNum;
-    // ESPN competitor order as secondary (preserves ESPN's leaderboard order within ties)
-    if (a._order !== b._order) return a._order - b._order;
-    // Fallback: sort by score to par, then total strokes
     if (a._sortScore !== b._sortScore) return a._sortScore - b._sortScore;
     return (a.totalStrokes || 999) - (b.totalStrokes || 999);
   });
