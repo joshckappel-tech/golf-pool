@@ -185,9 +185,13 @@ async function fetchFromCoreApi(eventId: string): Promise<any> {
     console.log(`[ESPN Core] Resolved batch ${Math.floor(i / BATCH) + 1}/${Math.ceil(allItems.length / BATCH)}`);
   }
 
-  // Log sample resolved data
+  // Log sample resolved data for debugging
   const s = allCompetitors[0];
-  console.log(`[ESPN Core] Sample resolved — name: ${s.athlete?.displayName}, score: ${JSON.stringify(s.score)?.substring(0, 80)}, linescores: ${s.linescores?.length}, status: ${JSON.stringify(s.status)?.substring(0, 80)}`);
+  console.log(`[ESPN Core] Sample resolved — name: ${s.athlete?.displayName}`);
+  console.log(`[ESPN Core]   score: ${JSON.stringify(s.score)?.substring(0, 120)}`);
+  console.log(`[ESPN Core]   status: ${JSON.stringify(s.status)?.substring(0, 200)}`);
+  console.log(`[ESPN Core]   linescores count: ${s.linescores?.length}, first: ${JSON.stringify(s.linescores?.[0])?.substring(0, 100)}`);
+  console.log(`[ESPN Core]   order: ${s.order}, earnings: ${s.earnings}`);
 
   // 4. Parse tournament status
   const statusType = compStatusData?.type || {};
@@ -304,19 +308,23 @@ async function fetchFromCoreApi(eventId: string): Promise<any> {
       let scoreDisplay = 'E';
       let totalStrokesFromScore: number | null = null;
       if (c.score) {
-        // completedRoundsDisplayValue is the best field for score to par
-        const parDisplay = c.score.completedRoundsDisplayValue || c.score.displayValue;
-        if (parDisplay !== undefined) {
+        // displayValue is score to par (e.g. "-21", "+3", "E")
+        // completedRoundsDisplayValue is the same but only for completed rounds
+        const parDisplay = c.score.displayValue || c.score.completedRoundsDisplayValue;
+        if (parDisplay !== undefined && parDisplay !== null) {
           scoreToPar = parseScoreToPar(parDisplay);
           scoreDisplay = String(parDisplay);
-        } else if (c.score.value !== undefined) {
-          scoreToPar = parseScoreToPar(c.score.value);
-          scoreDisplay = String(c.score.value);
         }
         // Total strokes from score.value or completedRoundsValue
-        const totalVal = c.score.completedRoundsValue ?? c.score.value;
+        const totalVal = c.score.value ?? c.score.completedRoundsValue;
         if (totalVal !== undefined && typeof totalVal === 'number') {
           totalStrokesFromScore = totalVal;
+        }
+        // Fallback: if displayValue didn't give us a score but we have total strokes and par
+        if (scoreToPar === null && totalStrokesFromScore !== null && par) {
+          const roundsPlayed = c.linescores?.length || (c.linescores?.items?.length) || 4;
+          scoreToPar = totalStrokesFromScore - (par * roundsPlayed);
+          scoreDisplay = scoreToPar === 0 ? 'E' : (scoreToPar > 0 ? '+' + scoreToPar : String(scoreToPar));
         }
       }
 
@@ -342,13 +350,19 @@ async function fetchFromCoreApi(eventId: string): Promise<any> {
           espnPos = pos.isTie ? `T${posNum}` : `${posNum}`;
         }
       }
+      // Fallback: use competitor order from the paginated list
+      const espnOrder: number = c.order != null ? Number(c.order) : 9999;
 
       // Thru from status
+      // status.displayValue: "F" for finished, or a number string for holes played
+      // status.thru: number of holes completed in current round
       let thru = '--';
       if (playerStatus !== 'active') {
         thru = '--';
+      } else if (c.status?.thru !== undefined && c.status?.thru !== null) {
+        thru = c.status.thru >= 18 ? 'F' : String(c.status.thru);
       } else if (c.status?.displayValue) {
-        thru = c.status.displayValue; // "F" for finished
+        thru = c.status.displayValue;
       } else if (tournamentComplete) {
         thru = 'F';
       }
@@ -367,11 +381,15 @@ async function fetchFromCoreApi(eventId: string): Promise<any> {
         ? completedRounds.reduce((a, b) => a + b, 0)
         : totalStrokesFromScore;
 
-      // Today (last completed round score to par)
+      // Today — current round score to par
       let today: number | null = null;
       if (playerStatus === 'active' && ls.length > 0) {
-        const lastRound = ls[ls.length - 1];
-        today = parseScoreToPar(lastRound?.displayValue);
+        // For live tournaments, use the current round (roundNumber - 1 index)
+        // For completed tournaments, use the last round
+        const currentRoundIdx = tournamentComplete ? ls.length - 1 : Math.min(roundNumber - 1, ls.length - 1);
+        if (currentRoundIdx >= 0 && currentRoundIdx < ls.length) {
+          today = parseScoreToPar(ls[currentRoundIdx]?.displayValue);
+        }
       }
 
       // Earnings already extracted from statistics in batch resolution
@@ -390,19 +408,31 @@ async function fetchFromCoreApi(eventId: string): Promise<any> {
         country: athlete.flag?.alt || null,
         earnings,
         _sortScore: scoreToPar !== null ? scoreToPar : 999,
+        _order: espnOrder,
       });
     } catch (err) {
       console.error('[ESPN Core] Error parsing competitor:', err);
     }
   }
 
-  // Sort by ESPN position (active players first, then cut/wd/dq)
+  // Sort by ESPN official position first, then by score as fallback
+  const parsePosNum = (pos: string | null): number => {
+    if (!pos) return 9999;
+    const n = parseInt(pos.replace(/^T/, ''), 10);
+    return isNaN(n) ? 9999 : n;
+  };
   parsed.sort((a, b) => {
     // Active players come first
     const aActive = a.status === 'active' ? 0 : 1;
     const bActive = b.status === 'active' ? 0 : 1;
     if (aActive !== bActive) return aActive - bActive;
-    // Within same status group, sort by score
+    // Use ESPN position as primary sort (handles tiebreakers correctly)
+    const aPosNum = parsePosNum(a.pos);
+    const bPosNum = parsePosNum(b.pos);
+    if (aPosNum !== bPosNum) return aPosNum - bPosNum;
+    // ESPN competitor order as secondary (preserves ESPN's leaderboard order within ties)
+    if (a._order !== b._order) return a._order - b._order;
+    // Fallback: sort by score to par, then total strokes
     if (a._sortScore !== b._sortScore) return a._sortScore - b._sortScore;
     return (a.totalStrokes || 999) - (b.totalStrokes || 999);
   });
@@ -429,12 +459,13 @@ async function fetchFromCoreApi(eventId: string): Promise<any> {
     }
   }
 
-  result.players = parsed.map(({ _sortScore, ...rest }) => rest);
+  result.players = parsed.map(({ _sortScore, _order, ...rest }) => rest);
 
   const withEarnings = result.players.filter((p: any) => p.earnings > 0).length;
   const withRounds = result.players.filter((p: any) => p.r1 !== null).length;
   console.log(`[ESPN Core] Parsed ${result.players.length} players. ${withRounds} with round scores, ${withEarnings} with earnings.`);
-  console.log(`[ESPN Core] Top: ${result.players[0]?.name} pos=${result.players[0]?.pos} score=${result.players[0]?.score} R1=${result.players[0]?.r1} R2=${result.players[0]?.r2} R3=${result.players[0]?.r3} R4=${result.players[0]?.r4} total=${result.players[0]?.totalStrokes}`);
+  const top5 = result.players.slice(0, 5).map((p: any) => `${p.pos} ${p.name} (${p.score}, R1:${p.r1} R2:${p.r2} R3:${p.r3} R4:${p.r4}, tot:${p.totalStrokes}, earn:${p.earnings})`).join(' | ');
+  console.log(`[ESPN Core] Top 5: ${top5}`);
 
   return result;
 }
