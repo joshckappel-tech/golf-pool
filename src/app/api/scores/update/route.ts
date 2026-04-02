@@ -395,6 +395,13 @@ async function fetchFromCoreApi(eventId: string): Promise<any> {
       // Earnings already extracted from statistics in batch resolution
       const earnings = c.earnings;
 
+      // Extract numeric position from ESPN position for sorting
+      let posNum = 9999;
+      if (espnPos) {
+        const pn = parseInt(espnPos.replace('T', ''), 10);
+        if (!isNaN(pn)) posNum = pn;
+      }
+
       parsed.push({
         name,
         pos: espnPos, // Use ESPN's official position
@@ -409,21 +416,27 @@ async function fetchFromCoreApi(eventId: string): Promise<any> {
         earnings,
         _sortScore: scoreToPar !== null ? scoreToPar : 999,
         _order: espnOrder,
+        _posNum: posNum,
       });
     } catch (err) {
       console.error('[ESPN Core] Error parsing competitor:', err);
     }
   }
 
-  // Sort using ESPN's competitor order — this is the exact leaderboard sequence from ESPN
-  // It already handles ties, cut ordering, etc. correctly
+  // Sort to match ESPN leaderboard order:
+  // 1. Active players first, then cut/wd/dq
+  // 2. By ESPN position number (from status.position — the live leaderboard position)
+  // 3. By ESPN competitor order (from paginated list — tiebreaker within same position)
+  // 4. By score to par, then total strokes as final fallback
   parsed.sort((a, b) => {
-    // ESPN order is the definitive leaderboard position (1, 2, 3, ...)
-    if (a._order !== b._order) return a._order - b._order;
-    // Fallback if order is missing: active first, then by score
     const aActive = a.status === 'active' ? 0 : 1;
     const bActive = b.status === 'active' ? 0 : 1;
     if (aActive !== bActive) return aActive - bActive;
+    // Position number from ESPN (T5 → 5, 1 → 1)
+    if (a._posNum !== b._posNum) return a._posNum - b._posNum;
+    // ESPN competitor order breaks ties within same position
+    if (a._order !== b._order) return a._order - b._order;
+    // Score fallback
     if (a._sortScore !== b._sortScore) return a._sortScore - b._sortScore;
     return (a.totalStrokes || 999) - (b.totalStrokes || 999);
   });
@@ -450,12 +463,13 @@ async function fetchFromCoreApi(eventId: string): Promise<any> {
     }
   }
 
-  result.players = parsed.map(({ _sortScore, _order, ...rest }) => ({ ...rest, espnOrder: _order }));
+  // After sorting, assign espnOrder as sequential index (1, 2, 3...) matching ESPN leaderboard order
+  result.players = parsed.map(({ _sortScore, _order, _posNum, ...rest }, idx) => ({ ...rest, espnOrder: idx + 1 }));
 
   const withEarnings = result.players.filter((p: any) => p.earnings > 0).length;
   const withRounds = result.players.filter((p: any) => p.r1 !== null).length;
   console.log(`[ESPN Core] Parsed ${result.players.length} players. ${withRounds} with round scores, ${withEarnings} with earnings.`);
-  const top5 = result.players.slice(0, 5).map((p: any) => `${p.pos} ${p.name} (${p.score}, R1:${p.r1} R2:${p.r2} R3:${p.r3} R4:${p.r4}, tot:${p.totalStrokes}, earn:${p.earnings})`).join(' | ');
+  const top5 = result.players.slice(0, 5).map((p: any) => `#${p.espnOrder} ${p.pos} ${p.name} (${p.score}, thru:${p.thru})`).join(' | ');
   console.log(`[ESPN Core] Top 5: ${top5}`);
 
   return result;
