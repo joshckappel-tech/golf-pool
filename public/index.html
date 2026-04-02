@@ -5688,14 +5688,9 @@
 
         // Check if a specific entry can be edited by the participant
         function canEditEntry(entry) {
-            // If admin explicitly set editable=true on this entry, allow it
-            if (entry.editable === true) {
-                // Still respect the deadline UNLESS admin checked the override
-                if (isBeforeDeadline() && isEntriesOpen()) return true;
-                if (poolSettings.editOverrideDeadline) return true;
-                return false;
-            }
-            // If editable is not explicitly set, fall back to deadline + entries open
+            // If admin explicitly set editable=true on this entry, always allow editing
+            if (entry.editable === true) return true;
+            // Otherwise, fall back to deadline + entries open
             return isBeforeDeadline() && isEntriesOpen();
         }
 
