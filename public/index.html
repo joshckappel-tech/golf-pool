@@ -5722,6 +5722,7 @@
             userEntries.forEach((entry, idx) => {
                 const tb = entry.tiebreaker !== null && entry.tiebreaker !== undefined ? formatScore(entry.tiebreaker) : '—';
                 const editable = canEditEntry(entry);
+                const canDelete = isBeforeDeadline() && isEntriesOpen();
                 const displayName = entry.entryName || ('Entry #' + (idx + 1));
                 const isPaid = entry.paymentStatus === 'paid';
                 const paymentBadge = isPaid
@@ -5740,7 +5741,7 @@
                         </div>
                         <div class="flex gap-2">
                             ${editable ? '<button class="text-sm px-3 py-1 rounded" style="background:rgba(196,163,90,0.15);border:1px solid rgba(196,163,90,0.3);color:#c4a35a;" onclick="editEntry(\'' + entry.id + '\')">Edit Picks</button>' : '<span class="text-xs px-2 py-1 rounded" style="background:rgba(100,116,139,0.2);color:#94a3b8;">Locked</span>'}
-                            ${editable ? '<button class="text-sm px-3 py-1 rounded" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#ef4444;" onclick="deleteEntry(\'' + entry.id + '\', \'' + displayName.replace(/'/g, "\\\\'") + '\')">Delete</button>' : ''}
+                            ${canDelete ? '<button class="text-sm px-3 py-1 rounded" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#ef4444;" onclick="deleteEntry(\'' + entry.id + '\', \'' + displayName.replace(/'/g, "\\\\'") + '\')">Delete</button>' : ''}
                         </div>
                     </div>
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
