@@ -450,7 +450,7 @@ async function fetchFromCoreApi(eventId: string): Promise<any> {
     }
   }
 
-  result.players = parsed.map(({ _sortScore, _order, ...rest }) => rest);
+  result.players = parsed.map(({ _sortScore, _order, ...rest }) => ({ ...rest, espnOrder: _order }));
 
   const withEarnings = result.players.filter((p: any) => p.earnings > 0).length;
   const withRounds = result.players.filter((p: any) => p.r1 !== null).length;
@@ -752,8 +752,8 @@ function parseEspnApiResponse(data: any): any {
       }
     }
 
-    // Remove internal sort field and add to result
-    result.players = parsed.map(({ _sortScore, ...rest }) => rest);
+    // Remove internal sort field, add espnOrder based on sorted position
+    result.players = parsed.map(({ _sortScore, ...rest }, idx) => ({ ...rest, espnOrder: idx + 1 }));
 
     console.log(`Parsed ${result.players.length} players. Round ${roundNumber} (${roundState}). Top: ${result.players[0]?.name} ${result.players[0]?.pos} ${result.players[0]?.score}`);
 

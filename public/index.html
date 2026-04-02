@@ -1305,8 +1305,11 @@
                     <div class="flex gap-3 mb-4 flex-wrap">
                         <button class="button-primary text-sm" onclick="fetchAndGenerateGroups()">Fetch Odds & Generate Groups</button>
                         <button class="button-secondary text-sm" onclick="saveGolferGroups()">Save Groups</button>
+                        <button class="text-sm px-3 py-1.5 rounded" style="background:rgba(59,130,246,0.2); color:#60a5fa; border:1px solid rgba(59,130,246,0.4);" onclick="auditGolferNamesVsESPN()">Audit Names vs ESPN</button>
                         <span id="golfer-groups-status" class="text-xs text-slate-500 self-center"></span>
                     </div>
+                    <!-- Name audit results -->
+                    <div id="name-audit-results" class="hidden mb-6"></div>
                     <!-- Paste Golfers -->
                     <div class="stat-card mb-6" style="background:rgba(196,163,90,0.06); border:1px solid rgba(196,163,90,0.2);">
                         <h4 class="font-bold text-sm mb-2" style="color:#c4a35a;">Paste Golfers</h4>
@@ -2596,7 +2599,10 @@
                     tot: p.totalStrokes || p.tot || null,
                     status: p.status || 'active',
                     earnings: p.earnings !== undefined ? p.earnings : null,
+                    espnOrder: p.espnOrder !== undefined ? p.espnOrder : 9999,
                 }));
+                // Sort by ESPN order to guarantee leaderboard matches ESPN exactly
+                players.sort((a, b) => a.espnOrder - b.espnOrder);
                 tournamentScores.length = 0;
                 tournamentScores.push(...players);
                 liveScoresReady = true;
@@ -2745,6 +2751,162 @@
                 if (name.toLowerCase().includes(lastName) && name.toLowerCase().includes(parts[0].toLowerCase())) return prize;
             }
             return 0;
+        }
+
+        // =====================================================
+        // NAME AUDIT — compare pool golfer names vs ESPN
+        // =====================================================
+        async function auditGolferNamesVsESPN() {
+            const resultsEl = document.getElementById('name-audit-results');
+            if (!resultsEl) return;
+            resultsEl.classList.remove('hidden');
+            resultsEl.innerHTML = '<div class="stat-card"><p class="text-sm text-slate-400">Fetching ESPN leaderboard names...</p></div>';
+
+            // Get ESPN names from live scores
+            const espnNames = tournamentScores.map(s => s.name).filter(Boolean);
+
+            if (espnNames.length === 0) {
+                // Try fetching fresh
+                try {
+                    await loadLiveScores();
+                } catch (e) {}
+                espnNames.push(...tournamentScores.map(s => s.name).filter(Boolean));
+            }
+
+            if (espnNames.length === 0) {
+                resultsEl.innerHTML = '<div class="stat-card"><p class="text-sm text-red-400">No ESPN data available. Make sure scores are loading on the Tournament tab first.</p></div>';
+                return;
+            }
+
+            // Get pool golfer names
+            const poolNames = allGolfers.map(g => g.name).filter(Boolean);
+            if (poolNames.length === 0) {
+                resultsEl.innerHTML = '<div class="stat-card"><p class="text-sm text-red-400">No golfers in your pool groups. Generate groups first.</p></div>';
+                return;
+            }
+
+            const espnLower = new Map(espnNames.map(n => [n.toLowerCase().trim(), n]));
+            const exact = [];
+            const mismatches = [];
+            const notInESPN = [];
+
+            for (const poolName of poolNames) {
+                const poolLower = poolName.toLowerCase().trim();
+                if (espnLower.has(poolLower)) {
+                    exact.push({ pool: poolName, espn: espnLower.get(poolLower) });
+                } else {
+                    // Find closest ESPN name
+                    let bestMatch = null;
+                    let bestScore = 0;
+                    for (const espnName of espnNames) {
+                        const score = nameSimilarity(poolLower, espnName.toLowerCase().trim());
+                        if (score > bestScore) {
+                            bestScore = score;
+                            bestMatch = espnName;
+                        }
+                    }
+                    if (bestScore >= 0.5) {
+                        mismatches.push({ pool: poolName, espn: bestMatch, score: bestScore, group: allGolfers.find(g => g.name === poolName)?.group || '?' });
+                    } else {
+                        notInESPN.push({ pool: poolName, bestGuess: bestMatch, score: bestScore, group: allGolfers.find(g => g.name === poolName)?.group || '?' });
+                    }
+                }
+            }
+
+            // Sort mismatches by similarity (worst first)
+            mismatches.sort((a, b) => a.score - b.score);
+
+            let html = '<div class="stat-card" style="border:1px solid rgba(59,130,246,0.3);">';
+            html += '<div class="flex justify-between items-center mb-4"><h4 class="font-bold" style="color:#60a5fa;">Name Audit: Pool vs ESPN</h4>';
+            html += '<button class="text-xs px-2 py-1 rounded" style="background:rgba(100,116,139,0.2);color:#94a3b8;" onclick="document.getElementById(\'name-audit-results\').classList.add(\'hidden\')">Close</button></div>';
+
+            // Summary
+            html += '<div class="flex gap-3 flex-wrap mb-4">';
+            html += '<span class="text-xs px-3 py-1.5 rounded" style="background:rgba(22,163,74,0.15);color:#22c55e;border:1px solid rgba(22,163,74,0.3);">' + exact.length + ' exact matches</span>';
+            html += '<span class="text-xs px-3 py-1.5 rounded" style="background:rgba(245,158,11,0.15);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);">' + mismatches.length + ' likely misspellings</span>';
+            html += '<span class="text-xs px-3 py-1.5 rounded" style="background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">' + notInESPN.length + ' not found in ESPN field</span>';
+            html += '<span class="text-xs px-3 py-1.5 rounded" style="background:rgba(100,116,139,0.15);color:#94a3b8;border:1px solid rgba(100,116,139,0.3);">' + espnNames.length + ' ESPN players</span>';
+            html += '</div>';
+
+            // Mismatches — these need fixing
+            if (mismatches.length > 0) {
+                html += '<h5 class="text-sm font-semibold mb-2" style="color:#f59e0b;">Likely Misspellings (click ESPN name to fix):</h5>';
+                html += '<table style="width:100%;font-size:0.8rem;margin-bottom:16px;border-collapse:collapse;">';
+                html += '<tr style="color:#94a3b8;text-align:left;border-bottom:1px solid rgba(100,116,139,0.3);"><th style="padding:6px;">Group</th><th style="padding:6px;">Your Pool Name</th><th style="padding:6px;"></th><th style="padding:6px;">ESPN Name</th><th style="padding:6px;">Similarity</th><th style="padding:6px;"></th></tr>';
+                mismatches.forEach(m => {
+                    const pct = Math.round(m.score * 100);
+                    const color = pct >= 80 ? '#22c55e' : pct >= 60 ? '#f59e0b' : '#ef4444';
+                    html += '<tr style="border-bottom:1px solid rgba(100,116,139,0.15);">';
+                    html += '<td style="padding:6px;color:#94a3b8;">' + m.group + '</td>';
+                    html += '<td style="padding:6px;color:#ef4444;text-decoration:line-through;">' + m.pool + '</td>';
+                    html += '<td style="padding:6px;color:#64748b;">→</td>';
+                    html += '<td style="padding:6px;color:#22c55e;font-weight:600;">' + m.espn + '</td>';
+                    html += '<td style="padding:6px;color:' + color + ';">' + pct + '%</td>';
+                    html += '<td style="padding:6px;"><button class="text-xs px-2 py-1 rounded cursor-pointer" style="background:rgba(22,163,74,0.2);color:#22c55e;border:1px solid rgba(22,163,74,0.4);" onclick="applyNameFix(\'' + m.pool.replace(/'/g, "\\'") + '\', \'' + m.espn.replace(/'/g, "\\'") + '\')">Fix</button></td>';
+                    html += '</tr>';
+                });
+                html += '</table>';
+                if (mismatches.length > 0) {
+                    html += '<button class="text-xs px-3 py-1.5 rounded mb-4" style="background:rgba(22,163,74,0.2);color:#22c55e;border:1px solid rgba(22,163,74,0.4);" onclick="applyAllNameFixes()">Fix All Misspellings</button>';
+                }
+            }
+
+            // Not found in ESPN
+            if (notInESPN.length > 0) {
+                html += '<h5 class="text-sm font-semibold mb-2" style="color:#ef4444;">Not Found in ESPN Field:</h5>';
+                html += '<p class="text-xs text-slate-500 mb-2">These golfers may not be in the tournament, or the name is too different to match automatically.</p>';
+                html += '<table style="width:100%;font-size:0.8rem;margin-bottom:16px;border-collapse:collapse;">';
+                html += '<tr style="color:#94a3b8;text-align:left;border-bottom:1px solid rgba(100,116,139,0.3);"><th style="padding:6px;">Group</th><th style="padding:6px;">Pool Name</th><th style="padding:6px;">Best Guess</th><th style="padding:6px;">Similarity</th></tr>';
+                notInESPN.forEach(m => {
+                    html += '<tr style="border-bottom:1px solid rgba(100,116,139,0.15);">';
+                    html += '<td style="padding:6px;color:#94a3b8;">' + m.group + '</td>';
+                    html += '<td style="padding:6px;color:#e2e8f0;">' + m.pool + '</td>';
+                    html += '<td style="padding:6px;color:#64748b;">' + (m.bestGuess || '—') + '</td>';
+                    html += '<td style="padding:6px;color:#ef4444;">' + Math.round(m.score * 100) + '%</td>';
+                    html += '</tr>';
+                });
+                html += '</table>';
+            }
+
+            // Exact matches (collapsed by default)
+            if (exact.length > 0) {
+                html += '<details><summary class="text-sm font-semibold mb-2 cursor-pointer" style="color:#22c55e;">' + exact.length + ' Exact Matches (click to expand)</summary>';
+                html += '<p class="text-xs text-slate-500 mb-2" style="column-count:3;column-gap:16px;">';
+                exact.forEach(m => { html += '<span style="display:inline-block;width:100%;">' + m.pool + '</span>'; });
+                html += '</p></details>';
+            }
+
+            html += '</div>';
+            resultsEl.innerHTML = html;
+
+            // Store mismatches for "Fix All"
+            window._auditMismatches = mismatches;
+        }
+
+        function applyNameFix(oldName, newName) {
+            const idx = allGolfers.findIndex(g => g.name === oldName);
+            if (idx === -1) { alert('Golfer "' + oldName + '" not found in pool.'); return; }
+            allGolfers[idx].name = newName;
+            renderAdminGolfers();
+            // Re-run audit to update the display
+            auditGolferNamesVsESPN();
+            // Mark groups as unsaved
+            const statusEl = document.getElementById('golfer-groups-status');
+            if (statusEl) { statusEl.textContent = 'Unsaved changes — click Save Groups'; statusEl.style.color = '#f59e0b'; }
+        }
+
+        function applyAllNameFixes() {
+            const mismatches = window._auditMismatches || [];
+            if (mismatches.length === 0) return;
+            let fixed = 0;
+            mismatches.forEach(m => {
+                const idx = allGolfers.findIndex(g => g.name === m.pool);
+                if (idx !== -1) { allGolfers[idx].name = m.espn; fixed++; }
+            });
+            renderAdminGolfers();
+            auditGolferNamesVsESPN();
+            const statusEl = document.getElementById('golfer-groups-status');
+            if (statusEl) { statusEl.textContent = fixed + ' names fixed — click Save Groups to save'; statusEl.style.color = '#f59e0b'; }
         }
 
         // Find golfer name from ID using allGolfers list
