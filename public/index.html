@@ -2471,7 +2471,8 @@
                         statusEl.value = poolSettings.poolStatus;
                     }
                 }
-                // Update home stats AFTER settings are loaded so entry fee is correct
+                // Update home stats and field AFTER settings are loaded
+                renderField();
                 updateHomeStats();
                 updateTabVisibility();
                 initTournamentSelector();
