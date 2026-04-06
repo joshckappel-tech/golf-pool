@@ -852,7 +852,7 @@
                                 <li>• 1 golfer from Group B</li>
                                 <li>• 1 golfer from Group C</li>
                                 <li>• 1 golfer from Group D</li>
-                                <li>• 2 wild cards (any golfer)</li>
+                                <li>• 2 wild cards (any golfers outside of Groups A-D)</li>
                                 <li>• Pick winning score to par (used for tiebreaker)</li>
                             </ul>
                         </div>
@@ -3250,7 +3250,7 @@
                 const subEl = document.getElementById('home-prize-pool-sub');
                 if (subEl) {
                     if (count === 0) subEl.textContent = 'Be the first to enter!';
-                    else subEl.textContent = count + ' entries × $' + fee;
+                    else subEl.textContent = count + ' entries';
                 }
                 // Update submission deadline display
                 const deadlineDisplayEl = document.getElementById('home-deadline');
