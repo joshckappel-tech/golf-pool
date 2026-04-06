@@ -823,7 +823,7 @@
                                     <span class="status-badge status-open">Entries Open</span>
                                 </div>
                                 <p class="text-sm mt-2" id="home-deadline" style="color:#94a3b8;"></p>
-                                <p class="text-xs mt-1" style="color:#f59e0b;">Payment must be received by the submission deadline for your entry to be accepted.</p>
+                                <p class="text-xs mt-1" id="home-payment-note" style="color:#f59e0b;">Payment must be received by the submission deadline for entry to be accepted.</p>
                             </div>
                             <div>
                                 <p class="text-slate-400 text-sm mb-1">Entries</p>
@@ -1120,7 +1120,7 @@
                         </div>
                         <button class="button-primary" id="new-entry-btn" onclick="startNewEntry()">+ New Entry</button>
                     </div>
-                    <p class="text-xs" style="color:#f59e0b;">Payment must be received by the submission deadline for your entry to be accepted.</p>
+                    <p class="text-xs" id="myentries-payment-note" style="color:#f59e0b;">Payment must be received by the submission deadline for entry to be accepted.</p>
                 </div>
                 <div id="myentries-container">
                     <p class="text-slate-400">Loading your entries...</p>
@@ -6152,6 +6152,12 @@
                     entryTabBtn.classList.remove('hidden');
                 }
             }
+            // Hide payment deadline notes when pool is live
+            const live = isPoolLive();
+            const homeNote = document.getElementById('home-payment-note');
+            if (homeNote) homeNote.style.display = live ? 'none' : '';
+            const myEntriesNote = document.getElementById('myentries-payment-note');
+            if (myEntriesNote) myEntriesNote.style.display = live ? 'none' : '';
         }
 
         // Check if a specific entry can be edited by the participant
