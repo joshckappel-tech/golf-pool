@@ -822,6 +822,7 @@
                                 <div class="flex items-center gap-2">
                                     <span class="status-badge status-open">Entries Open</span>
                                 </div>
+                                <p class="text-sm mt-2" id="home-deadline" style="color:#94a3b8;"></p>
                             </div>
                             <div>
                                 <p class="text-slate-400 text-sm mb-1">Entries</p>
@@ -3250,6 +3251,23 @@
                     if (count === 0) subEl.textContent = 'Be the first to enter!';
                     else subEl.textContent = count + ' entries × $' + fee;
                 }
+                // Update submission deadline display
+                const deadlineDisplayEl = document.getElementById('home-deadline');
+                if (deadlineDisplayEl && poolSettings.submissionDeadline) {
+                    const dl = new Date(poolSettings.submissionDeadline);
+                    const now = new Date();
+                    const isPast = now >= dl;
+                    const opts = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' };
+                    const dlStr = dl.toLocaleString('en-US', opts);
+                    if (isPast) {
+                        deadlineDisplayEl.innerHTML = '⏰ Submission Deadline: <span style="color:#ef4444; font-weight:600;">' + dlStr + ' (Closed)</span>';
+                    } else {
+                        deadlineDisplayEl.innerHTML = '⏰ Submission Deadline: <span style="color:#4ade80; font-weight:600;">' + dlStr + '</span>';
+                    }
+                } else if (deadlineDisplayEl) {
+                    deadlineDisplayEl.textContent = '';
+                }
+
                 // Update payout distribution on home tab
                 renderHomePayoutDistribution(count, fee);
             } catch (e) { console.log('Failed to update home stats:', e); }
