@@ -1385,6 +1385,23 @@
                                     <th>Editable</th>
                                     <th>Status</th>
                                 </tr>
+                                <tr id="admin-entries-filter-row" style="background:rgba(15,23,42,0.5);">
+                                    <td></td>
+                                    <td><input type="text" placeholder="Filter..." data-col="1" onkeyup="filterAdminEntries()" class="w-full text-xs rounded px-1 py-0.5" style="background:rgba(15,23,42,0.8);border:1px solid rgba(100,116,139,0.3);color:#e2e8f0;"></td>
+                                    <td><input type="text" placeholder="Filter..." data-col="2" onkeyup="filterAdminEntries()" class="w-full text-xs rounded px-1 py-0.5" style="background:rgba(15,23,42,0.8);border:1px solid rgba(100,116,139,0.3);color:#e2e8f0;"></td>
+                                    <td><input type="text" placeholder="Filter..." data-col="3" onkeyup="filterAdminEntries()" class="w-full text-xs rounded px-1 py-0.5" style="background:rgba(15,23,42,0.8);border:1px solid rgba(100,116,139,0.3);color:#e2e8f0;"></td>
+                                    <td><input type="text" placeholder="Filter..." data-col="4" onkeyup="filterAdminEntries()" class="w-full text-xs rounded px-1 py-0.5" style="background:rgba(15,23,42,0.8);border:1px solid rgba(100,116,139,0.3);color:#e2e8f0;"></td>
+                                    <td><input type="text" placeholder="Filter..." data-col="5" onkeyup="filterAdminEntries()" class="w-full text-xs rounded px-1 py-0.5" style="background:rgba(15,23,42,0.8);border:1px solid rgba(100,116,139,0.3);color:#e2e8f0;"></td>
+                                    <td><input type="text" placeholder="Filter..." data-col="6" onkeyup="filterAdminEntries()" class="w-full text-xs rounded px-1 py-0.5" style="background:rgba(15,23,42,0.8);border:1px solid rgba(100,116,139,0.3);color:#e2e8f0;"></td>
+                                    <td><input type="text" placeholder="Filter..." data-col="7" onkeyup="filterAdminEntries()" class="w-full text-xs rounded px-1 py-0.5" style="background:rgba(15,23,42,0.8);border:1px solid rgba(100,116,139,0.3);color:#e2e8f0;"></td>
+                                    <td><input type="text" placeholder="Filter..." data-col="8" onkeyup="filterAdminEntries()" class="w-full text-xs rounded px-1 py-0.5" style="background:rgba(15,23,42,0.8);border:1px solid rgba(100,116,139,0.3);color:#e2e8f0;"></td>
+                                    <td><input type="text" placeholder="Filter..." data-col="9" onkeyup="filterAdminEntries()" class="w-full text-xs rounded px-1 py-0.5" style="background:rgba(15,23,42,0.8);border:1px solid rgba(100,116,139,0.3);color:#e2e8f0;"></td>
+                                    <td><input type="text" placeholder="Filter..." data-col="10" onkeyup="filterAdminEntries()" class="w-full text-xs rounded px-1 py-0.5" style="background:rgba(15,23,42,0.8);border:1px solid rgba(100,116,139,0.3);color:#e2e8f0;"></td>
+                                    <td></td>
+                                    <td><select data-col="12" onchange="filterAdminEntries()" class="w-full text-xs rounded px-1 py-0.5" style="background:rgba(15,23,42,0.8);border:1px solid rgba(100,116,139,0.3);color:#e2e8f0;"><option value="">All</option><option value="Paid">Paid</option><option value="Unpaid">Unpaid</option></select></td>
+                                    <td><select data-col="13" onchange="filterAdminEntries()" class="w-full text-xs rounded px-1 py-0.5" style="background:rgba(15,23,42,0.8);border:1px solid rgba(100,116,139,0.3);color:#e2e8f0;"><option value="">All</option><option value="On">On</option><option value="Off">Off</option></select></td>
+                                    <td><select data-col="14" onchange="filterAdminEntries()" class="w-full text-xs rounded px-1 py-0.5" style="background:rgba(15,23,42,0.8);border:1px solid rgba(100,116,139,0.3);color:#e2e8f0;"><option value="">All</option><option value="Active">Active</option><option value="Rejected">Rejected</option></select></td>
+                                </tr>
                             </thead>
                             <tbody id="admin-entries-body">
                                 <tr><td colspan="15" style="text-align:center; padding:20px; color:#94a3b8;">Click "Refresh Entries" to load entries</td></tr>
@@ -3497,6 +3514,41 @@
             }
         }
 
+        function filterAdminEntries() {
+            const filterRow = document.getElementById('admin-entries-filter-row');
+            if (!filterRow) return;
+            const filters = {};
+            filterRow.querySelectorAll('input, select').forEach(el => {
+                const col = parseInt(el.dataset.col);
+                const val = (el.value || '').trim().toLowerCase();
+                if (val) filters[col] = val;
+            });
+            const tbody = document.getElementById('admin-entries-body');
+            if (!tbody) return;
+            const rows = tbody.querySelectorAll('tr');
+            let visibleCount = 0;
+            rows.forEach(row => {
+                const cells = row.querySelectorAll('td');
+                if (cells.length < 2) return; // skip placeholder rows
+                let show = true;
+                for (const [col, val] of Object.entries(filters)) {
+                    const cell = cells[parseInt(col)];
+                    if (!cell) { show = false; break; }
+                    const cellText = cell.textContent.toLowerCase().trim();
+                    if (!cellText.includes(val)) { show = false; break; }
+                }
+                row.style.display = show ? '' : 'none';
+                if (show) visibleCount++;
+            });
+            const countEl = document.getElementById('admin-entries-count');
+            const totalRows = Array.from(rows).filter(r => r.querySelectorAll('td').length >= 2).length;
+            if (countEl && Object.keys(filters).length > 0) {
+                countEl.textContent = visibleCount + ' of ' + totalRows + ' entries shown';
+            } else if (countEl) {
+                countEl.textContent = totalRows + ' total entries';
+            }
+        }
+
         async function togglePaymentStatus(entryId, markAsPaid) {
             try {
                 const res = await fetch('/api/entries', {
@@ -3591,7 +3643,7 @@
                     }
                 });
 
-                showPaymentMatchReview(matches, unmatched, alreadyPaid);
+                showPaymentMatchReview(matches, unmatched, alreadyPaid, entries);
             };
             reader.readAsText(file);
         }
@@ -3660,7 +3712,7 @@
             return null;
         }
 
-        function showPaymentMatchReview(matches, unmatched, alreadyPaid) {
+        function showPaymentMatchReview(matches, unmatched, alreadyPaid, allEntries) {
             // Build modal
             const modal = document.createElement('div');
             modal.id = 'payment-import-modal';
@@ -3669,11 +3721,44 @@
             let html = '<div style="max-width:700px;width:100%;max-height:85vh;overflow-y:auto;background:linear-gradient(135deg,#0f172a,#1e3a1f);border:1px solid rgba(22,163,74,0.4);border-radius:12px;padding:24px;">';
             html += '<h3 style="font-size:1.3rem;font-weight:700;color:#c4a35a;margin-bottom:16px;">Import Payment Matches</h3>';
 
-            // Summary
-            html += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;">';
+            // Summary badges
+            html += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;">';
             html += '<span style="padding:6px 14px;border-radius:8px;font-size:0.85rem;background:rgba(22,163,74,0.2);color:#22c55e;border:1px solid rgba(22,163,74,0.3);">' + matches.length + ' to mark paid</span>';
             html += '<span style="padding:6px 14px;border-radius:8px;font-size:0.85rem;background:rgba(59,130,246,0.2);color:#60a5fa;border:1px solid rgba(59,130,246,0.3);">' + alreadyPaid.length + ' already paid</span>';
             html += '<span style="padding:6px 14px;border-radius:8px;font-size:0.85rem;background:rgba(239,68,68,0.2);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">' + unmatched.length + ' unmatched</span>';
+            html += '</div>';
+
+            // Payment reconciliation comparison
+            const csvTotalPayments = matches.length + alreadyPaid.length + unmatched.length;
+            const csvTotalAmount = [...matches, ...alreadyPaid, ...unmatched].reduce((sum, item) => {
+                const p = item.payment || item;
+                const amt = parseFloat((p.amount || '0').replace(/[^0-9.]/g, ''));
+                return sum + (isNaN(amt) ? 0 : amt);
+            }, 0);
+            const currentPaidCount = allEntries ? allEntries.filter(e => e.paymentStatus === 'paid').length : alreadyPaid.length;
+            const afterImportPaidCount = currentPaidCount + matches.length;
+            const totalEntryCount = allEntries ? allEntries.length : (currentPaidCount + matches.length);
+            const entryFee = poolSettings.entryFee || 30;
+            const expectedFromNew = matches.length * entryFee;
+            const totalPaidAmount = afterImportPaidCount * entryFee;
+            const variance = csvTotalAmount > 0 ? csvTotalAmount - expectedFromNew : 0;
+
+            html += '<div style="background:rgba(15,23,42,0.6);border:1px solid rgba(100,116,139,0.3);border-radius:8px;padding:14px;margin-bottom:20px;">';
+            html += '<h4 style="font-size:0.9rem;font-weight:600;color:#e2e8f0;margin-bottom:10px;">Payment Reconciliation</h4>';
+            html += '<table style="width:100%;font-size:0.8rem;border-collapse:collapse;">';
+            html += '<tr><td style="padding:4px 0;color:#94a3b8;">Payments in CSV</td><td style="padding:4px 0;text-align:right;color:#e2e8f0;font-weight:600;">' + csvTotalPayments + (csvTotalAmount > 0 ? ' ($' + csvTotalAmount.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}) + ')' : '') + '</td></tr>';
+            html += '<tr><td style="padding:4px 0;color:#94a3b8;">Currently marked paid</td><td style="padding:4px 0;text-align:right;color:#60a5fa;font-weight:600;">' + currentPaidCount + ' of ' + totalEntryCount + ' entries</td></tr>';
+            html += '<tr><td style="padding:4px 0;color:#94a3b8;">After import</td><td style="padding:4px 0;text-align:right;color:#22c55e;font-weight:600;">' + afterImportPaidCount + ' of ' + totalEntryCount + ' entries ($' + totalPaidAmount.toLocaleString() + ')</td></tr>';
+            if (csvTotalAmount > 0) {
+                const varianceColor = variance === 0 ? '#22c55e' : (variance > 0 ? '#eab308' : '#ef4444');
+                const varianceSign = variance > 0 ? '+' : '';
+                html += '<tr style="border-top:1px solid rgba(100,116,139,0.3);"><td style="padding:6px 0 2px;color:#94a3b8;font-weight:600;">Variance (CSV collected vs. new matches)</td><td style="padding:6px 0 2px;text-align:right;color:' + varianceColor + ';font-weight:700;">' + varianceSign + '$' + variance.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}) + '</td></tr>';
+            }
+            const unpaidAfter = totalEntryCount - afterImportPaidCount;
+            if (unpaidAfter > 0) {
+                html += '<tr><td style="padding:4px 0;color:#94a3b8;">Still unpaid after import</td><td style="padding:4px 0;text-align:right;color:#eab308;font-weight:600;">' + unpaidAfter + ' entries</td></tr>';
+            }
+            html += '</table>';
             html += '</div>';
 
             // Matches to apply
