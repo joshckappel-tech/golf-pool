@@ -6281,7 +6281,7 @@
             userEntries.forEach((entry, idx) => {
                 const tb = entry.tiebreaker !== null && entry.tiebreaker !== undefined ? formatScore(entry.tiebreaker) : '—';
                 const editable = canEditEntry(entry);
-                const canDelete = isBeforeDeadline() && isEntriesOpen();
+                const canDelete = isBeforeDeadline() && isEntriesOpen() && entry.paymentStatus !== 'paid';
                 const displayName = entry.entryName || ('Entry #' + (idx + 1));
                 const isPaid = entry.paymentStatus === 'paid';
                 const paymentBadge = isPaid
