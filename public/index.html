@@ -3658,9 +3658,7 @@
 
                 if (status === 'refunded') {
                     refundedPayments.push(payment);
-                } else if (status === 'pending') {
-                    pendingPayments.push(payment);
-                } else if (['available', 'completed', 'paid', 'approved', 'succeeded'].includes(status)) {
+                } else if (['available', 'completed', 'paid', 'approved', 'succeeded', 'pending'].includes(status)) {
                     paidPayments.push(payment);
                 }
             }
@@ -3875,9 +3873,6 @@
                 html += '<span style="padding:5px 12px;border-radius:8px;font-size:0.8rem;background:rgba(245,158,11,0.2);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);">' + paidNoPayment.length + ' paid but not in file</span>';
             }
             html += '<span style="padding:5px 12px;border-radius:8px;font-size:0.8rem;background:rgba(100,116,139,0.2);color:#94a3b8;border:1px solid rgba(100,116,139,0.3);">' + unmatched.length + ' unmatched</span>';
-            if (pendingPayments.length > 0) {
-                html += '<span style="padding:5px 12px;border-radius:8px;font-size:0.8rem;background:rgba(168,85,247,0.2);color:#a855f7;border:1px solid rgba(168,85,247,0.3);">' + pendingPayments.length + ' pending in CheddarUp</span>';
-            }
             html += '</div>';
 
             // Reconciliation
@@ -3968,13 +3963,6 @@
                 html += '</table></details>';
             }
 
-            // Pending CheddarUp payments
-            if (pendingPayments.length > 0) {
-                html += '<details style="margin-bottom:16px;"><summary style="font-size:0.95rem;font-weight:600;color:#a855f7;cursor:pointer;">Pending in CheddarUp (' + pendingPayments.length + ')</summary>';
-                html += '<p style="font-size:0.75rem;color:#94a3b8;margin-top:4px;margin-bottom:8px;">These payments are still pending and will not be imported.</p>';
-                html += '<p style="font-size:0.78rem;color:#94a3b8;">' + pendingPayments.map(p => p.entryName || p.name).join(', ') + '</p>';
-                html += '</details>';
-            }
 
             // Buttons
             html += '<div style="display:flex;gap:12px;justify-content:flex-end;margin-top:16px;">';
