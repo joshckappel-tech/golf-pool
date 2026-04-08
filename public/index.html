@@ -1355,8 +1355,8 @@
                     <div class="flex flex-wrap items-center gap-3 mb-4">
                         <button class="button-secondary text-sm" onclick="loadAdminEntries()">Refresh Entries</button>
                         <button class="button-secondary text-sm" onclick="exportEntriesToExcel()">Export to Excel</button>
-                        <button class="text-sm px-3 py-1.5 rounded" style="background:rgba(59,130,246,0.2); color:#60a5fa; border:1px solid rgba(59,130,246,0.4);" onclick="document.getElementById('csv-payment-file').click()">Import Payments (CSV)</button>
-                        <input type="file" id="csv-payment-file" accept=".csv" style="display:none;" onchange="handlePaymentCSV(this)">
+                        <button class="text-sm px-3 py-1.5 rounded" style="background:rgba(59,130,246,0.2); color:#60a5fa; border:1px solid rgba(59,130,246,0.4);" onclick="document.getElementById('csv-payment-file').click()">Import Payments</button>
+                        <input type="file" id="csv-payment-file" accept=".csv,.xlsx,.xls" style="display:none;" onchange="handlePaymentImport(this)">
                         <button class="text-sm px-3 py-1.5 rounded" style="background:rgba(22,163,74,0.2); color:#22c55e; border:1px solid rgba(22,163,74,0.4);" onclick="bulkToggleEditable(true)">Enable All Editing</button>
                         <button class="text-sm px-3 py-1.5 rounded" style="background:rgba(239,68,68,0.2); color:#ef4444; border:1px solid rgba(239,68,68,0.4);" onclick="bulkToggleEditable(false)">Disable All Editing</button>
                         <label class="flex items-center gap-2 text-sm text-slate-400 ml-2" title="When checked, editing stays available even after the submission deadline">
@@ -3567,85 +3567,157 @@
         }
 
         // =====================================================
-        // CSV PAYMENT IMPORT (CheddarUp)
+        // PAYMENT IMPORT (CheddarUp CSV/XLSX)
         // =====================================================
-        function handlePaymentCSV(input) {
+
+        // Load SheetJS for xlsx parsing (lazy-loaded on first import)
+        let sheetJSLoaded = false;
+        function loadSheetJS() {
+            return new Promise((resolve, reject) => {
+                if (sheetJSLoaded) { resolve(); return; }
+                const s = document.createElement('script');
+                s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+                s.onload = () => { sheetJSLoaded = true; resolve(); };
+                s.onerror = () => reject(new Error('Failed to load SheetJS'));
+                document.head.appendChild(s);
+            });
+        }
+
+        async function handlePaymentImport(input) {
             const file = input.files[0];
             if (!file) return;
-            input.value = ''; // reset so same file can be re-selected
-            const reader = new FileReader();
-            reader.onload = async function(e) {
-                const text = e.target.result;
-                const rows = parseCSV(text);
-                if (rows.length < 2) { alert('CSV appears empty or has no data rows.'); return; }
+            input.value = '';
 
-                const headers = rows[0].map(h => h.trim().toLowerCase());
-                // Try to find relevant columns — flexible matching for CheddarUp exports
-                const nameCol = headers.findIndex(h => h === 'respondent' || h === 'name' || h === 'payer name' || h === 'full name' || h === 'buyer name' || h === 'first name');
-                const lastNameCol = headers.findIndex(h => h === 'last name' || h === 'last');
-                const emailCol = headers.findIndex(h => h.includes('email'));
-                const entryNameCol = headers.findIndex(h => h.includes('entry name') || h === 'entry_name' || h === 'entryname');
-                // CheddarUp custom fields often appear as form response columns
-                const itemCol = headers.findIndex(h => h === 'item' || h === 'item name' || h === 'product');
-                const statusCol = headers.findIndex(h => h === 'status' || h === 'payment status' || h === 'order status');
-                const amountCol = headers.findIndex(h => h.includes('amount') || h.includes('total') || h.includes('price'));
+            const isXlsx = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+            let rows = [];
 
-                if (nameCol === -1 && emailCol === -1 && entryNameCol === -1) {
-                    alert('Could not find Name, Email, or Entry Name columns in the CSV.\n\nDetected columns: ' + rows[0].join(', '));
+            if (isXlsx) {
+                try {
+                    await loadSheetJS();
+                    const data = await file.arrayBuffer();
+                    const wb = XLSX.read(data, { type: 'array' });
+                    // Prefer "Payments" sheet, fallback to first sheet
+                    const sheetName = wb.SheetNames.includes('Payments') ? 'Payments' : wb.SheetNames[0];
+                    const ws = wb.Sheets[sheetName];
+                    rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+                } catch (e) {
+                    alert('Failed to read Excel file: ' + e.message);
                     return;
                 }
+            } else {
+                const text = await file.text();
+                rows = parseCSV(text);
+            }
 
-                // Parse payments from CSV
-                const payments = [];
-                for (let i = 1; i < rows.length; i++) {
-                    const row = rows[i];
-                    if (!row || row.length === 0 || row.every(c => !c.trim())) continue;
-                    // Skip non-completed payments if status column exists
-                    if (statusCol !== -1) {
-                        const st = (row[statusCol] || '').trim().toLowerCase();
-                        if (st && st !== 'completed' && st !== 'paid' && st !== 'approved' && st !== 'succeeded') continue;
-                    }
-                    let name = nameCol !== -1 ? (row[nameCol] || '').trim() : '';
-                    if (lastNameCol !== -1 && name) name = name + ' ' + (row[lastNameCol] || '').trim();
-                    payments.push({
-                        name: name,
-                        email: emailCol !== -1 ? (row[emailCol] || '').trim().toLowerCase() : '',
-                        entryName: entryNameCol !== -1 ? (row[entryNameCol] || '').trim() : '',
-                        amount: amountCol !== -1 ? (row[amountCol] || '').trim() : '',
-                        row: i,
-                    });
+            if (rows.length < 2) { alert('File appears empty or has no data rows.'); return; }
+
+            const headers = rows[0].map(h => String(h).trim().toLowerCase());
+
+            // Detect columns flexibly
+            const findCol = (...terms) => headers.findIndex(h => terms.some(t => h === t || h.includes(t)));
+            const fullNameCol = findCol('full name');
+            const firstNameCol = findCol('first name');
+            const lastNameCol = findCol('last name');
+            const emailCol = findCol('email address', 'email');
+            const entryNameCol = findCol('entry name');
+            const statusCol = findCol('status', 'payment status', 'order status');
+            const amountCol = findCol('items total', 'amount', 'total', 'price');
+
+            const hasNameCol = fullNameCol !== -1 || firstNameCol !== -1;
+            if (!hasNameCol && emailCol === -1 && entryNameCol === -1) {
+                alert('Could not find Name, Email, or Entry Name columns.\n\nDetected columns: ' + rows[0].join(', '));
+                return;
+            }
+
+            // Parse all payment rows into buckets by status
+            const paidPayments = [];
+            const refundedPayments = [];
+            const pendingPayments = [];
+
+            for (let i = 1; i < rows.length; i++) {
+                const row = rows[i];
+                if (!row || row.length === 0 || row.every(c => !String(c).trim())) continue;
+
+                const status = statusCol !== -1 ? String(row[statusCol] || '').trim().toLowerCase() : 'available';
+                let name = fullNameCol !== -1 ? String(row[fullNameCol] || '').trim() : '';
+                if (!name && firstNameCol !== -1) {
+                    name = String(row[firstNameCol] || '').trim();
+                    if (lastNameCol !== -1) name += ' ' + String(row[lastNameCol] || '').trim();
+                    name = name.trim();
                 }
+                const entryRaw = entryNameCol !== -1 ? String(row[entryNameCol] || '').trim() : '';
+                const entryName = (entryRaw === 'NaN' || entryRaw === 'nan' || entryRaw === '') ? '' : entryRaw;
 
-                if (payments.length === 0) { alert('No valid payment rows found in the CSV.'); return; }
+                const payment = {
+                    name: name,
+                    email: emailCol !== -1 ? String(row[emailCol] || '').trim().toLowerCase() : '',
+                    entryName: entryName,
+                    amount: amountCol !== -1 ? String(row[amountCol] || '').trim() : '',
+                    status: status,
+                };
 
-                // Fetch current entries
-                let entries = [];
-                try {
-                    const res = await fetch('/api/entries');
-                    if (res.ok) entries = await res.json();
-                } catch (e) { alert('Failed to load entries for matching.'); return; }
+                if (status === 'refunded') {
+                    refundedPayments.push(payment);
+                } else if (status === 'pending') {
+                    pendingPayments.push(payment);
+                } else if (['available', 'completed', 'paid', 'approved', 'succeeded'].includes(status)) {
+                    paidPayments.push(payment);
+                }
+            }
 
-                // Match payments to entries
-                const matches = [];
-                const unmatched = [];
-                const alreadyPaid = [];
+            if (paidPayments.length === 0 && refundedPayments.length === 0) {
+                alert('No valid payment rows found in the file.');
+                return;
+            }
 
-                payments.forEach(p => {
-                    const match = findEntryMatch(p, entries);
-                    if (match) {
-                        if (match.paymentStatus === 'paid') {
-                            alreadyPaid.push({ payment: p, entry: match });
-                        } else {
-                            matches.push({ payment: p, entry: match });
-                        }
+            // Fetch current entries
+            let entries = [];
+            try {
+                const res = await fetch('/api/entries');
+                if (res.ok) entries = await res.json();
+            } catch (e) { alert('Failed to load entries for matching.'); return; }
+
+            // Match paid payments to entries
+            const matches = [];       // unpaid entries to mark as paid
+            const alreadyPaid = [];   // entries already paid that match a payment
+            const unmatched = [];     // payments with no matching entry
+            const usedEntryIds = new Set();
+
+            paidPayments.forEach(p => {
+                const match = findBestEntryMatch(p, entries, usedEntryIds);
+                if (match) {
+                    usedEntryIds.add(match.entry.id);
+                    if (match.entry.paymentStatus === 'paid') {
+                        alreadyPaid.push({ payment: p, entry: match.entry, method: match.method });
                     } else {
-                        unmatched.push(p);
+                        matches.push({ payment: p, entry: match.entry, method: match.method });
                     }
-                });
+                } else {
+                    unmatched.push(p);
+                }
+            });
 
-                showPaymentMatchReview(matches, unmatched, alreadyPaid, entries);
-            };
-            reader.readAsText(file);
+            // Check for entries currently marked paid that have a refund in the spreadsheet
+            const incorrectlyPaid = [];
+            refundedPayments.forEach(p => {
+                const match = findBestEntryMatch(p, entries, new Set());
+                if (match && match.entry.paymentStatus === 'paid') {
+                    incorrectlyPaid.push({ payment: p, entry: match.entry, method: match.method });
+                }
+            });
+
+            // Check for entries marked paid that have NO matching payment at all in the file
+            const allFileEmails = new Set([...paidPayments, ...refundedPayments, ...pendingPayments].map(p => p.email.toLowerCase()).filter(Boolean));
+            const allFileEntryNames = new Set([...paidPayments, ...refundedPayments, ...pendingPayments].map(p => normalizeStr(p.entryName)).filter(Boolean));
+            const paidNoPayment = entries.filter(e => {
+                if (e.paymentStatus !== 'paid') return false;
+                // Check if this entry was matched to any paid payment
+                if (alreadyPaid.some(m => m.entry.id === e.id)) return false;
+                if (matches.some(m => m.entry.id === e.id)) return false;
+                return true;
+            });
+
+            showPaymentMatchReview(matches, unmatched, alreadyPaid, incorrectlyPaid, paidNoPayment, pendingPayments, entries);
         }
 
         function parseCSV(text) {
@@ -3675,144 +3747,252 @@
 
         function normalizeStr(s) { return (s || '').trim().toLowerCase().replace(/\s+/g, ' '); }
 
-        function findEntryMatch(payment, entries) {
+        // Levenshtein distance for fuzzy matching
+        function levenshtein(a, b) {
+            if (a.length === 0) return b.length;
+            if (b.length === 0) return a.length;
+            const matrix = [];
+            for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+            for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+            for (let i = 1; i <= b.length; i++) {
+                for (let j = 1; j <= a.length; j++) {
+                    matrix[i][j] = b[i-1] === a[j-1]
+                        ? matrix[i-1][j-1]
+                        : Math.min(matrix[i-1][j-1]+1, matrix[i][j-1]+1, matrix[i-1][j]+1);
+                }
+            }
+            return matrix[b.length][a.length];
+        }
+
+        function stringSimilarity(a, b) {
+            if (!a || !b) return 0;
+            const na = normalizeStr(a), nb = normalizeStr(b);
+            if (na === nb) return 1;
+            // Check if one contains the other
+            if (na.includes(nb) || nb.includes(na)) return 0.9;
+            const maxLen = Math.max(na.length, nb.length);
+            if (maxLen === 0) return 0;
+            return 1 - levenshtein(na, nb) / maxLen;
+        }
+
+        function findBestEntryMatch(payment, entries, usedIds) {
             const pName = normalizeStr(payment.name);
             const pEmail = normalizeStr(payment.email);
             const pEntry = normalizeStr(payment.entryName);
+            const available = entries.filter(e => !usedIds.has(e.id));
 
             // Priority 1: Exact entry name match
             if (pEntry) {
-                const m = entries.find(e => normalizeStr(e.entryName) === pEntry);
-                if (m) return m;
+                const exact = available.find(e => normalizeStr(e.entryName) === pEntry);
+                if (exact) return { entry: exact, method: 'entry name (exact)' };
             }
 
-            // Priority 2: Email + name match
+            // Priority 2: Fuzzy entry name match (similarity > 0.8)
+            if (pEntry) {
+                let bestSim = 0, bestMatch = null;
+                available.forEach(e => {
+                    const sim = stringSimilarity(pEntry, e.entryName);
+                    if (sim > bestSim) { bestSim = sim; bestMatch = e; }
+                });
+                if (bestMatch && bestSim >= 0.8) {
+                    return { entry: bestMatch, method: 'entry name (fuzzy ' + Math.round(bestSim*100) + '%)' };
+                }
+            }
+
+            // Priority 3: Email match — if payment has email, match to entries by same email
             if (pEmail) {
-                const emailMatches = entries.filter(e => normalizeStr(e.email) === pEmail);
-                if (emailMatches.length === 1) return emailMatches[0];
-                if (emailMatches.length > 1 && pName) {
-                    const nameMatch = emailMatches.find(e => normalizeStr(e.name) === pName);
-                    if (nameMatch) return nameMatch;
-                    return emailMatches[0]; // fallback to first email match
+                const emailMatches = available.filter(e => normalizeStr(e.email) === pEmail);
+                if (emailMatches.length === 1) {
+                    return { entry: emailMatches[0], method: 'email' };
+                }
+                if (emailMatches.length > 1) {
+                    // Multiple entries from same email — try fuzzy entry name within those
+                    if (pEntry) {
+                        let bestSim = 0, bestMatch = null;
+                        emailMatches.forEach(e => {
+                            const sim = stringSimilarity(pEntry, e.entryName);
+                            if (sim > bestSim) { bestSim = sim; bestMatch = e; }
+                        });
+                        if (bestMatch && bestSim >= 0.5) {
+                            return { entry: bestMatch, method: 'email + entry name (' + Math.round(bestSim*100) + '%)' };
+                        }
+                    }
+                    // Try name match within email group
+                    if (pName) {
+                        const nameMatch = emailMatches.find(e => normalizeStr(e.name) === pName);
+                        if (nameMatch) return { entry: nameMatch, method: 'email + name' };
+                    }
+                    // Last resort: return first unmatched email entry
+                    return { entry: emailMatches[0], method: 'email (first available)' };
                 }
             }
 
-            // Priority 3: Name match (exact)
+            // Priority 4: Name match (exact, then fuzzy)
             if (pName) {
-                const nameMatches = entries.filter(e => normalizeStr(e.name) === pName);
-                if (nameMatches.length === 1) return nameMatches[0];
-                // If multiple entries from same person, try entry name
+                const nameMatches = available.filter(e => normalizeStr(e.name) === pName);
+                if (nameMatches.length === 1) return { entry: nameMatches[0], method: 'name (exact)' };
                 if (nameMatches.length > 1 && pEntry) {
-                    const entryMatch = nameMatches.find(e => normalizeStr(e.entryName) === pEntry);
-                    if (entryMatch) return entryMatch;
+                    let bestSim = 0, bestMatch = null;
+                    nameMatches.forEach(e => {
+                        const sim = stringSimilarity(pEntry, e.entryName);
+                        if (sim > bestSim) { bestSim = sim; bestMatch = e; }
+                    });
+                    if (bestMatch && bestSim >= 0.5) return { entry: bestMatch, method: 'name + entry name (' + Math.round(bestSim*100) + '%)' };
+                    return { entry: nameMatches[0], method: 'name (first available)' };
                 }
-                if (nameMatches.length > 0) return nameMatches[0];
+                if (nameMatches.length > 0) return { entry: nameMatches[0], method: 'name (exact)' };
+
+                // Fuzzy name
+                let bestSim = 0, bestMatch = null;
+                available.forEach(e => {
+                    const sim = stringSimilarity(pName, e.name);
+                    if (sim > bestSim) { bestSim = sim; bestMatch = e; }
+                });
+                if (bestMatch && bestSim >= 0.8) {
+                    return { entry: bestMatch, method: 'name (fuzzy ' + Math.round(bestSim*100) + '%)' };
+                }
             }
 
             return null;
         }
 
-        function showPaymentMatchReview(matches, unmatched, alreadyPaid, allEntries) {
-            // Build modal
+        function showPaymentMatchReview(matches, unmatched, alreadyPaid, incorrectlyPaid, paidNoPayment, pendingPayments, allEntries) {
             const modal = document.createElement('div');
             modal.id = 'payment-import-modal';
             modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px;';
 
-            let html = '<div style="max-width:700px;width:100%;max-height:85vh;overflow-y:auto;background:linear-gradient(135deg,#0f172a,#1e3a1f);border:1px solid rgba(22,163,74,0.4);border-radius:12px;padding:24px;">';
-            html += '<h3 style="font-size:1.3rem;font-weight:700;color:#c4a35a;margin-bottom:16px;">Import Payment Matches</h3>';
+            let html = '<div style="max-width:800px;width:100%;max-height:90vh;overflow-y:auto;background:linear-gradient(135deg,#0f172a,#1e3a1f);border:1px solid rgba(22,163,74,0.4);border-radius:12px;padding:24px;">';
+            html += '<h3 style="font-size:1.3rem;font-weight:700;color:#c4a35a;margin-bottom:16px;">Payment Import Review</h3>';
 
             // Summary badges
-            html += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;">';
-            html += '<span style="padding:6px 14px;border-radius:8px;font-size:0.85rem;background:rgba(22,163,74,0.2);color:#22c55e;border:1px solid rgba(22,163,74,0.3);">' + matches.length + ' to mark paid</span>';
-            html += '<span style="padding:6px 14px;border-radius:8px;font-size:0.85rem;background:rgba(59,130,246,0.2);color:#60a5fa;border:1px solid rgba(59,130,246,0.3);">' + alreadyPaid.length + ' already paid</span>';
-            html += '<span style="padding:6px 14px;border-radius:8px;font-size:0.85rem;background:rgba(239,68,68,0.2);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">' + unmatched.length + ' unmatched</span>';
+            html += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">';
+            html += '<span style="padding:5px 12px;border-radius:8px;font-size:0.8rem;background:rgba(22,163,74,0.2);color:#22c55e;border:1px solid rgba(22,163,74,0.3);">' + matches.length + ' to mark paid</span>';
+            html += '<span style="padding:5px 12px;border-radius:8px;font-size:0.8rem;background:rgba(59,130,246,0.2);color:#60a5fa;border:1px solid rgba(59,130,246,0.3);">' + alreadyPaid.length + ' already paid</span>';
+            if (incorrectlyPaid.length > 0) {
+                html += '<span style="padding:5px 12px;border-radius:8px;font-size:0.8rem;background:rgba(239,68,68,0.2);color:#ef4444;border:1px solid rgba(239,68,68,0.3);">' + incorrectlyPaid.length + ' refunded (should unpay)</span>';
+            }
+            if (paidNoPayment.length > 0) {
+                html += '<span style="padding:5px 12px;border-radius:8px;font-size:0.8rem;background:rgba(245,158,11,0.2);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);">' + paidNoPayment.length + ' paid but not in file</span>';
+            }
+            html += '<span style="padding:5px 12px;border-radius:8px;font-size:0.8rem;background:rgba(100,116,139,0.2);color:#94a3b8;border:1px solid rgba(100,116,139,0.3);">' + unmatched.length + ' unmatched</span>';
+            if (pendingPayments.length > 0) {
+                html += '<span style="padding:5px 12px;border-radius:8px;font-size:0.8rem;background:rgba(168,85,247,0.2);color:#a855f7;border:1px solid rgba(168,85,247,0.3);">' + pendingPayments.length + ' pending in CheddarUp</span>';
+            }
             html += '</div>';
 
-            // Payment reconciliation comparison
-            const csvTotalPayments = matches.length + alreadyPaid.length + unmatched.length;
-            const csvTotalAmount = [...matches, ...alreadyPaid, ...unmatched].reduce((sum, item) => {
-                const p = item.payment || item;
-                const amt = parseFloat((p.amount || '0').replace(/[^0-9.]/g, ''));
-                return sum + (isNaN(amt) ? 0 : amt);
-            }, 0);
-            const currentPaidCount = allEntries ? allEntries.filter(e => e.paymentStatus === 'paid').length : alreadyPaid.length;
-            const afterImportPaidCount = currentPaidCount + matches.length;
-            const totalEntryCount = allEntries ? allEntries.length : (currentPaidCount + matches.length);
+            // Reconciliation
             const entryFee = poolSettings.entryFee || 30;
-            const expectedFromNew = matches.length * entryFee;
-            const totalPaidAmount = afterImportPaidCount * entryFee;
-            const variance = csvTotalAmount > 0 ? csvTotalAmount - expectedFromNew : 0;
+            const totalEntries = allEntries.length;
+            const currentPaidCount = allEntries.filter(e => e.paymentStatus === 'paid').length;
+            const afterPaidCount = currentPaidCount + matches.length - incorrectlyPaid.length;
+            const csvCollected = (matches.length + alreadyPaid.length) * entryFee;
+            const csvCollectedTotal = [...matches, ...alreadyPaid].reduce((s, m) => {
+                const a = parseFloat(String(m.payment.amount || '0').replace(/[^0-9.]/g, ''));
+                return s + (isNaN(a) ? 0 : a);
+            }, 0);
+            const afterPaidAmount = afterPaidCount * entryFee;
+            const variance = csvCollectedTotal - afterPaidAmount;
 
             html += '<div style="background:rgba(15,23,42,0.6);border:1px solid rgba(100,116,139,0.3);border-radius:8px;padding:14px;margin-bottom:20px;">';
             html += '<h4 style="font-size:0.9rem;font-weight:600;color:#e2e8f0;margin-bottom:10px;">Payment Reconciliation</h4>';
             html += '<table style="width:100%;font-size:0.8rem;border-collapse:collapse;">';
-            html += '<tr><td style="padding:4px 0;color:#94a3b8;">Payments in CSV</td><td style="padding:4px 0;text-align:right;color:#e2e8f0;font-weight:600;">' + csvTotalPayments + (csvTotalAmount > 0 ? ' ($' + csvTotalAmount.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}) + ')' : '') + '</td></tr>';
-            html += '<tr><td style="padding:4px 0;color:#94a3b8;">Currently marked paid</td><td style="padding:4px 0;text-align:right;color:#60a5fa;font-weight:600;">' + currentPaidCount + ' of ' + totalEntryCount + ' entries</td></tr>';
-            html += '<tr><td style="padding:4px 0;color:#94a3b8;">After import</td><td style="padding:4px 0;text-align:right;color:#22c55e;font-weight:600;">' + afterImportPaidCount + ' of ' + totalEntryCount + ' entries ($' + totalPaidAmount.toLocaleString() + ')</td></tr>';
-            if (csvTotalAmount > 0) {
-                const varianceColor = variance === 0 ? '#22c55e' : (variance > 0 ? '#eab308' : '#ef4444');
-                const varianceSign = variance > 0 ? '+' : '';
-                html += '<tr style="border-top:1px solid rgba(100,116,139,0.3);"><td style="padding:6px 0 2px;color:#94a3b8;font-weight:600;">Variance (CSV collected vs. new matches)</td><td style="padding:6px 0 2px;text-align:right;color:' + varianceColor + ';font-weight:700;">' + varianceSign + '$' + variance.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}) + '</td></tr>';
+            html += '<tr><td style="padding:4px 0;color:#94a3b8;">Total payments collected (per file)</td><td style="padding:4px 0;text-align:right;color:#e2e8f0;font-weight:600;">' + (matches.length + alreadyPaid.length) + ' payments' + (csvCollectedTotal > 0 ? ' ($' + csvCollectedTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) + ')' : '') + '</td></tr>';
+            html += '<tr><td style="padding:4px 0;color:#94a3b8;">Currently marked paid on site</td><td style="padding:4px 0;text-align:right;color:#60a5fa;font-weight:600;">' + currentPaidCount + ' of ' + totalEntries + ' entries ($' + (currentPaidCount * entryFee).toLocaleString() + ')</td></tr>';
+            html += '<tr><td style="padding:4px 0;color:#94a3b8;">After import applied</td><td style="padding:4px 0;text-align:right;color:#22c55e;font-weight:600;">' + afterPaidCount + ' of ' + totalEntries + ' entries ($' + afterPaidAmount.toLocaleString() + ')</td></tr>';
+            if (csvCollectedTotal > 0) {
+                const vc = variance === 0 ? '#22c55e' : (variance > 0 ? '#eab308' : '#ef4444');
+                const vs = variance > 0 ? '+' : '';
+                html += '<tr style="border-top:1px solid rgba(100,116,139,0.3);"><td style="padding:6px 0 2px;color:#94a3b8;font-weight:600;">Variance (collected vs. paid entries)</td><td style="padding:6px 0 2px;text-align:right;color:' + vc + ';font-weight:700;">' + vs + '$' + variance.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) + '</td></tr>';
             }
-            const unpaidAfter = totalEntryCount - afterImportPaidCount;
-            if (unpaidAfter > 0) {
-                html += '<tr><td style="padding:4px 0;color:#94a3b8;">Still unpaid after import</td><td style="padding:4px 0;text-align:right;color:#eab308;font-weight:600;">' + unpaidAfter + ' entries</td></tr>';
+            const stillUnpaid = totalEntries - afterPaidCount;
+            if (stillUnpaid > 0) {
+                html += '<tr><td style="padding:4px 0;color:#94a3b8;">Still unpaid after import</td><td style="padding:4px 0;text-align:right;color:#eab308;font-weight:600;">' + stillUnpaid + ' entries ($' + (stillUnpaid * entryFee).toLocaleString() + ')</td></tr>';
             }
-            html += '</table>';
-            html += '</div>';
+            html += '</table></div>';
 
-            // Matches to apply
+            // Will Mark as Paid
             if (matches.length > 0) {
-                html += '<h4 style="font-size:0.95rem;font-weight:600;color:#22c55e;margin-bottom:8px;">Will Mark as Paid:</h4>';
-                html += '<table style="width:100%;font-size:0.8rem;margin-bottom:16px;border-collapse:collapse;">';
-                html += '<tr style="color:#94a3b8;text-align:left;border-bottom:1px solid rgba(100,116,139,0.3);"><th style="padding:6px;">CSV Payment</th><th style="padding:6px;">Matched Entry</th><th style="padding:6px;">Entry Name</th></tr>';
+                html += '<h4 style="font-size:0.95rem;font-weight:600;color:#22c55e;margin-bottom:8px;">Will Mark as Paid (' + matches.length + '):</h4>';
+                html += '<table style="width:100%;font-size:0.78rem;margin-bottom:16px;border-collapse:collapse;">';
+                html += '<tr style="color:#94a3b8;text-align:left;border-bottom:1px solid rgba(100,116,139,0.3);"><th style="padding:5px;">CSV Payment</th><th style="padding:5px;">Matched Entry</th><th style="padding:5px;">Match Method</th></tr>';
                 matches.forEach(m => {
                     html += '<tr style="border-bottom:1px solid rgba(100,116,139,0.15);">';
-                    html += '<td style="padding:6px;color:#e2e8f0;">' + (m.payment.name || m.payment.email) + (m.payment.amount ? ' <span style="color:#94a3b8;">($' + m.payment.amount.replace(/[^0-9.]/g,'') + ')</span>' : '') + '</td>';
-                    html += '<td style="padding:6px;color:#e2e8f0;">' + (m.entry.name || '') + '</td>';
-                    html += '<td style="padding:6px;color:#c4a35a;">' + (m.entry.entryName || '') + '</td>';
+                    html += '<td style="padding:5px;color:#e2e8f0;">' + (m.payment.entryName || m.payment.name || m.payment.email) + '</td>';
+                    html += '<td style="padding:5px;color:#c4a35a;">' + (m.entry.entryName || m.entry.name) + '</td>';
+                    html += '<td style="padding:5px;color:#64748b;font-size:0.7rem;">' + m.method + '</td>';
                     html += '</tr>';
                 });
                 html += '</table>';
             }
 
-            // Already paid
+            // Refunded — should unpay
+            if (incorrectlyPaid.length > 0) {
+                html += '<h4 style="font-size:0.95rem;font-weight:600;color:#ef4444;margin-bottom:8px;">Refunded — Should Unmark Paid (' + incorrectlyPaid.length + '):</h4>';
+                html += '<table style="width:100%;font-size:0.78rem;margin-bottom:16px;border-collapse:collapse;">';
+                html += '<tr style="color:#94a3b8;text-align:left;border-bottom:1px solid rgba(100,116,139,0.3);"><th style="padding:5px;">Entry</th><th style="padding:5px;">Payer</th><th style="padding:5px;">Match Method</th></tr>';
+                incorrectlyPaid.forEach(m => {
+                    html += '<tr style="border-bottom:1px solid rgba(100,116,139,0.15);">';
+                    html += '<td style="padding:5px;color:#ef4444;">' + (m.entry.entryName || m.entry.name) + '</td>';
+                    html += '<td style="padding:5px;color:#e2e8f0;">' + m.payment.name + '</td>';
+                    html += '<td style="padding:5px;color:#64748b;font-size:0.7rem;">' + m.method + '</td>';
+                    html += '</tr>';
+                });
+                html += '</table>';
+            }
+
+            // Paid but not in file
+            if (paidNoPayment.length > 0) {
+                html += '<h4 style="font-size:0.95rem;font-weight:600;color:#f59e0b;margin-bottom:8px;">Paid on Site but No Payment in File (' + paidNoPayment.length + '):</h4>';
+                html += '<p style="font-size:0.78rem;color:#94a3b8;margin-bottom:16px;">' + paidNoPayment.map(e => e.entryName || e.name).join(', ') + '</p>';
+            }
+
+            // Already Paid (confirmed)
             if (alreadyPaid.length > 0) {
-                html += '<h4 style="font-size:0.95rem;font-weight:600;color:#60a5fa;margin-bottom:8px;">Already Marked Paid (no change):</h4>';
-                html += '<p style="font-size:0.8rem;color:#94a3b8;margin-bottom:16px;">';
-                html += alreadyPaid.map(m => (m.entry.entryName || m.entry.name)).join(', ');
-                html += '</p>';
+                html += '<details style="margin-bottom:16px;"><summary style="font-size:0.95rem;font-weight:600;color:#60a5fa;cursor:pointer;">Already Paid — Confirmed (' + alreadyPaid.length + ')</summary>';
+                html += '<p style="font-size:0.78rem;color:#94a3b8;margin-top:8px;">' + alreadyPaid.map(m => (m.entry.entryName || m.entry.name)).join(', ') + '</p>';
+                html += '</details>';
             }
 
             // Unmatched
             if (unmatched.length > 0) {
-                html += '<h4 style="font-size:0.95rem;font-weight:600;color:#ef4444;margin-bottom:8px;">No Match Found:</h4>';
-                html += '<table style="width:100%;font-size:0.8rem;margin-bottom:16px;border-collapse:collapse;">';
-                html += '<tr style="color:#94a3b8;text-align:left;border-bottom:1px solid rgba(100,116,139,0.3);"><th style="padding:6px;">Name</th><th style="padding:6px;">Email</th><th style="padding:6px;">Entry Name</th></tr>';
+                html += '<details style="margin-bottom:16px;"><summary style="font-size:0.95rem;font-weight:600;color:#94a3b8;cursor:pointer;">Unmatched CSV Payments (' + unmatched.length + ')</summary>';
+                html += '<table style="width:100%;font-size:0.78rem;margin-top:8px;border-collapse:collapse;">';
+                html += '<tr style="color:#94a3b8;text-align:left;border-bottom:1px solid rgba(100,116,139,0.3);"><th style="padding:5px;">Name</th><th style="padding:5px;">Email</th><th style="padding:5px;">Entry Name</th></tr>';
                 unmatched.forEach(p => {
                     html += '<tr style="border-bottom:1px solid rgba(100,116,139,0.15);">';
-                    html += '<td style="padding:6px;color:#e2e8f0;">' + (p.name || '—') + '</td>';
-                    html += '<td style="padding:6px;color:#e2e8f0;">' + (p.email || '—') + '</td>';
-                    html += '<td style="padding:6px;color:#e2e8f0;">' + (p.entryName || '—') + '</td>';
+                    html += '<td style="padding:5px;color:#e2e8f0;">' + (p.name || '—') + '</td>';
+                    html += '<td style="padding:5px;color:#e2e8f0;">' + (p.email || '—') + '</td>';
+                    html += '<td style="padding:5px;color:#e2e8f0;">' + (p.entryName || '—') + '</td>';
                     html += '</tr>';
                 });
-                html += '</table>';
+                html += '</table></details>';
+            }
+
+            // Pending CheddarUp payments
+            if (pendingPayments.length > 0) {
+                html += '<details style="margin-bottom:16px;"><summary style="font-size:0.95rem;font-weight:600;color:#a855f7;cursor:pointer;">Pending in CheddarUp (' + pendingPayments.length + ')</summary>';
+                html += '<p style="font-size:0.75rem;color:#94a3b8;margin-top:4px;margin-bottom:8px;">These payments are still pending and will not be imported.</p>';
+                html += '<p style="font-size:0.78rem;color:#94a3b8;">' + pendingPayments.map(p => p.entryName || p.name).join(', ') + '</p>';
+                html += '</details>';
             }
 
             // Buttons
             html += '<div style="display:flex;gap:12px;justify-content:flex-end;margin-top:16px;">';
             html += '<button onclick="closePaymentImportModal()" class="text-sm px-4 py-2 rounded" style="background:rgba(100,116,139,0.2);border:1px solid rgba(100,116,139,0.3);color:#94a3b8;">Cancel</button>';
-            if (matches.length > 0) {
-                html += '<button id="apply-payments-btn" onclick="applyPaymentMatches()" class="button-primary text-sm" style="padding:8px 20px;">Confirm & Mark ' + matches.length + ' as Paid</button>';
+            const totalActions = matches.length + incorrectlyPaid.length;
+            if (totalActions > 0) {
+                let btnLabel = '';
+                if (matches.length > 0 && incorrectlyPaid.length > 0) btnLabel = 'Mark ' + matches.length + ' Paid & Unpay ' + incorrectlyPaid.length;
+                else if (matches.length > 0) btnLabel = 'Confirm & Mark ' + matches.length + ' as Paid';
+                else btnLabel = 'Unpay ' + incorrectlyPaid.length + ' Refunded';
+                html += '<button id="apply-payments-btn" onclick="applyPaymentMatches()" class="button-primary text-sm" style="padding:8px 20px;">' + btnLabel + '</button>';
             }
-            html += '</div>';
-            html += '</div>';
+            html += '</div></div>';
 
             modal.innerHTML = html;
             document.body.appendChild(modal);
-
-            // Store matches for the apply function
             window._pendingPaymentMatches = matches;
+            window._pendingPaymentUnpay = incorrectlyPaid;
         }
 
         // 3-option modal for tournament change confirmation
@@ -3856,17 +4036,20 @@
             const modal = document.getElementById('payment-import-modal');
             if (modal) modal.remove();
             window._pendingPaymentMatches = null;
+            window._pendingPaymentUnpay = null;
         }
 
         async function applyPaymentMatches() {
             const matches = window._pendingPaymentMatches || [];
-            if (matches.length === 0) return;
+            const unpays = window._pendingPaymentUnpay || [];
+            if (matches.length === 0 && unpays.length === 0) return;
 
             const btn = document.getElementById('apply-payments-btn');
             if (btn) { btn.textContent = 'Applying...'; btn.disabled = true; }
 
-            let success = 0;
-            let failed = 0;
+            let paidSuccess = 0, unpaySuccess = 0, failed = 0;
+
+            // Mark matched entries as paid
             for (const m of matches) {
                 try {
                     const res = await fetch('/api/entries', {
@@ -3874,13 +4057,30 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ id: m.entry.id, paymentStatus: 'paid' })
                     });
-                    if (res.ok) success++; else failed++;
+                    if (res.ok) paidSuccess++; else failed++;
+                } catch (e) { failed++; }
+            }
+
+            // Unpay refunded entries
+            for (const m of unpays) {
+                try {
+                    const res = await fetch('/api/entries', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: m.entry.id, paymentStatus: 'pending' })
+                    });
+                    if (res.ok) unpaySuccess++; else failed++;
                 } catch (e) { failed++; }
             }
 
             closePaymentImportModal();
             loadAdminEntries();
-            alert('Payment import complete: ' + success + ' entries marked as paid' + (failed > 0 ? ', ' + failed + ' failed' : '') + '.');
+            let msg = 'Payment import complete:';
+            if (paidSuccess > 0) msg += ' ' + paidSuccess + ' marked paid';
+            if (unpaySuccess > 0) msg += (paidSuccess > 0 ? ',' : '') + ' ' + unpaySuccess + ' unpaid (refunded)';
+            if (failed > 0) msg += ', ' + failed + ' failed';
+            msg += '.';
+            alert(msg);
         }
 
         async function rejectEntry(entryId, reject) {
