@@ -25,6 +25,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const tournamentKey = body.tournamentKey || 'unknown'
     const tournamentName = body.tournamentName || 'Unknown Tournament'
+    const standings = body.standings || null // Pre-calculated final standings with earnings/payouts
 
     const db = await getDb()
     let entries: any[] = []
@@ -41,12 +42,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Build archive record
-    const archiveRecord = {
+    const archiveRecord: any = {
       tournamentKey,
       tournamentName,
       archivedAt: new Date().toISOString(),
       entryCount: entries.length,
       entries,
+    }
+
+    // Include final standings if provided (entries with calculated earnings and payouts)
+    if (standings && Array.isArray(standings) && standings.length > 0) {
+      archiveRecord.standings = standings
     }
 
     // Save archive

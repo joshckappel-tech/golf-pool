@@ -914,7 +914,7 @@
                     <div id="tournamentInfoBar" style="margin-bottom:12px; padding:8px 12px; background:rgba(255,255,255,0.05); border-radius:8px; font-size:0.9rem; color:#e2e8f0;"></div>
                     <!-- Entry Selector -->
                     <div id="entryHighlightRow" style="margin-bottom:12px; padding:10px 14px; background:rgba(196,163,90,0.08); border:1px solid rgba(196,163,90,0.2); border-radius:8px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                        <label style="font-size:0.85rem; font-weight:600; color:#c4a35a; white-space:nowrap;">Highlight Entry:</label>
+                        <label style="font-size:0.85rem; font-weight:600; color:#c4a35a; white-space:nowrap;">Highlight My Entry:</label>
                         <select id="entryHighlightSelect" class="search-input" style="max-width:260px; min-width:150px; flex:1;" onchange="onEntryHighlightChange()">
                             <option value="">— Select an entry —</option>
                         </select>
@@ -1042,7 +1042,7 @@
                                 <th style="width: 140px; cursor:pointer;" onclick="sortPoolStandings('groupD')">Group D <span id="sort-icon-groupD"></span></th>
                                 <th style="width: 160px; cursor:pointer;" onclick="sortPoolStandings('wc1')">Wild Card 1 <span id="sort-icon-wc1"></span></th>
                                 <th style="width: 160px; cursor:pointer;" onclick="sortPoolStandings('wc2')">Wild Card 2 <span id="sort-icon-wc2"></span></th>
-                                <th style="width: 120px; cursor:pointer;" onclick="sortPoolStandings('total')">Total <span id="sort-icon-total"></span></th>
+                                <th style="width: 120px; cursor:pointer;" onclick="sortPoolStandings('total')">Points <span id="sort-icon-total"></span></th>
                                 <th style="width: 100px; cursor:pointer;" onclick="sortPoolStandings('tb')">TB <span id="sort-icon-tb"></span></th>
                                 <th style="width: 100px; cursor:pointer;" onclick="sortPoolStandings('payout')">Payout <span id="sort-icon-payout"></span></th>
                             </tr>
@@ -3016,6 +3016,8 @@
 
                 return {
                     name: entry.entryName || entry.name || entry.entrantName || 'Unknown',
+                    userId: entry.userId || null,
+                    email: entry.email || null,
                     groupA: { golfer: pickA, amount: prizeA },
                     groupB: { golfer: pickB, amount: prizeB },
                     groupC: { golfer: pickC, amount: prizeC },
@@ -3101,10 +3103,38 @@
 
             const isMobile = window.innerWidth <= 640;
 
+            // Pin current user's entries at the top
+            const isMyEntry = (entry) => currentUser && (entry.userId === currentUser.id || (entry.email && currentUser.email && entry.email.toLowerCase() === currentUser.email.toLowerCase()));
+            const myEntries = data.filter(isMyEntry);
+            const otherEntries = data.filter(e => !isMyEntry(e));
+
+            if (myEntries.length > 0 && !isAdminUser) {
+                // Render "My Entries" header row
+                const headerRow = document.createElement('tr');
+                headerRow.innerHTML = '<td colspan="11" style="padding:8px 12px; background:rgba(196,163,90,0.1); border-bottom:1px solid rgba(196,163,90,0.3); font-size:0.8rem; font-weight:600; color:#c4a35a;">My Entries</td>';
+                tbody.appendChild(headerRow);
+
+                myEntries.forEach(entry => {
+                    tbody.appendChild(createLeaderboardRow(entry, isMobile, true));
+                });
+
+                // Separator
+                const sepRow = document.createElement('tr');
+                sepRow.innerHTML = '<td colspan="11" style="padding:6px 12px; background:rgba(100,116,139,0.08); border-bottom:1px solid rgba(100,116,139,0.2); font-size:0.75rem; color:#64748b;">All Entries</td>';
+                tbody.appendChild(sepRow);
+            }
+
+            // Render all entries (including user's, in their ranked position)
             data.forEach((entry, index) => {
+                tbody.appendChild(createLeaderboardRow(entry, isMobile, false));
+            });
+        }
+
+        function createLeaderboardRow(entry, isMobile, isHighlighted) {
                 const rowClass = entry.rank === 1 ? 'rank-1' : (entry.rank <= 8 ? 'rank-2-8' : '');
                 const row = document.createElement('tr');
                 row.className = rowClass;
+                if (isHighlighted) row.style.background = 'rgba(196,163,90,0.08)';
                 row.setAttribute('data-name', (entry.name || '').toLowerCase());
 
                 const rankBadgeClass = entry.rank === 1 ? 'rank-1-badge' : (entry.rank <= 3 ? 'rank-2-badge' : 'rank-3-badge');
@@ -3149,8 +3179,7 @@
                     <td class="payout-gold font-bold">${entry.payout > 0 ? formatPrizeMoney(entry.payout) : '—'}</td>
                 `;
 
-                tbody.appendChild(row);
-            });
+                return row;
         }
 
         // Filter Leaderboard
@@ -3369,11 +3398,10 @@
                 { key: 'B', fields: ['groupB', 'pickGroupB'] },
                 { key: 'C', fields: ['groupC', 'pickGroupC'] },
                 { key: 'D', fields: ['groupD', 'pickGroupD'] },
-                { key: 'Wild Card 1', fields: ['wildCard1', 'wc1'] },
-                { key: 'Wild Card 2', fields: ['wildCard2', 'wc2'] },
+                { key: 'Wild Cards', fields: ['wildCard1', 'wc1', 'wildCard2', 'wc2'], multi: true },
             ];
 
-            const groupColors = { 'A': '#c4a35a', 'B': '#16a34a', 'C': '#3b82f6', 'D': '#a855f7', 'Wild Card 1': '#f59e0b', 'Wild Card 2': '#f97316' };
+            const groupColors = { 'A': '#c4a35a', 'B': '#16a34a', 'C': '#3b82f6', 'D': '#a855f7', 'Wild Cards': '#f59e0b' };
             const totalEntries = analyticsEntries.length;
 
             // Check if an entry is selected
@@ -3385,19 +3413,38 @@
 
             groups.forEach(g => {
                 const counts = {};
-                analyticsEntries.forEach(e => {
-                    let pick = null;
-                    for (const f of g.fields) { if (e[f]) { pick = e[f]; break; } }
-                    if (pick) counts[pick] = (counts[pick] || 0) + 1;
-                });
+                const myPicks = [];
+                if (g.multi) {
+                    // Combined group (Wild Cards): count picks from multiple field pairs
+                    const fieldPairs = [];
+                    for (let fi = 0; fi < g.fields.length; fi += 2) {
+                        fieldPairs.push(g.fields.slice(fi, fi + 2));
+                    }
+                    analyticsEntries.forEach(e => {
+                        fieldPairs.forEach(pair => {
+                            let pick = null;
+                            for (const f of pair) { if (e[f]) { pick = e[f]; break; } }
+                            if (pick) counts[pick] = (counts[pick] || 0) + 1;
+                        });
+                    });
+                    if (selectedEntry) {
+                        fieldPairs.forEach(pair => {
+                            for (const f of pair) { if (selectedEntry[f]) { myPicks.push(selectedEntry[f]); break; } }
+                        });
+                    }
+                } else {
+                    analyticsEntries.forEach(e => {
+                        let pick = null;
+                        for (const f of g.fields) { if (e[f]) { pick = e[f]; break; } }
+                        if (pick) counts[pick] = (counts[pick] || 0) + 1;
+                    });
+                    if (selectedEntry) {
+                        for (const f of g.fields) { if (selectedEntry[f]) { myPicks.push(selectedEntry[f]); break; } }
+                    }
+                }
 
                 pickDistributions[g.key] = counts;
-
-                // If an entry is selected, only show their pick for this group
-                let myPick = null;
-                if (selectedEntry) {
-                    for (const f of g.fields) { if (selectedEntry[f]) { myPick = selectedEntry[f]; break; } }
-                }
+                const myPick = myPicks.length > 0 ? myPicks[0] : null;
 
                 // Sort by count descending
                 const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
@@ -3410,11 +3457,11 @@
                     html += '<p class="text-slate-500 text-sm">No picks in this group yet.</p>';
                 } else {
                     sorted.forEach(([golfer, count]) => {
-                        // If entry selected, only show the golfer they picked
-                        if (selectedEntry && golfer !== myPick) return;
+                        // If entry selected, only show the golfers they picked
+                        if (selectedEntry && !myPicks.includes(golfer)) return;
 
                         const pct = Math.round((count / totalEntries) * 100);
-                        const isMyPick = selectedEntry && golfer === myPick;
+                        const isMyPick = selectedEntry && myPicks.includes(golfer);
                         html += '<div class="mb-3">';
                         html += '<div class="flex justify-between text-sm mb-1"><span class="text-slate-300">' + golfer + (isMyPick ? ' ⭐' : '') + '</span><span class="font-semibold" style="color:' + color + ';">' + count + ' (' + pct + '%)</span></div>';
                         html += '<div style="background:rgba(255,255,255,0.1); border-radius:4px; height:8px; overflow:hidden;">';
@@ -5692,20 +5739,27 @@
             try {
                 const res = await fetch('/api/entries');
                 if (res.ok) {
-                    entriesCache = (await res.json()).filter(e => e.entryStatus !== 'rejected');
-                    // Keep existing selection
+                    const allEntries = (await res.json()).filter(e => e.entryStatus !== 'rejected');
+                    entriesCache = allEntries;
+
+                    // Filter to current user's entries only (admin sees all)
+                    const myEntries = isAdminUser ? allEntries : allEntries.filter(e => {
+                        if (!currentUser) return false;
+                        return e.userId === currentUser.id || (e.email && currentUser.email && e.email.toLowerCase() === currentUser.email.toLowerCase());
+                    });
+
                     const prev = sel.value;
                     sel.innerHTML = '<option value="">— Select an entry —</option>';
-                    entriesCache.forEach((e, i) => {
+                    myEntries.forEach(e => {
+                        const idx = entriesCache.indexOf(e);
                         const opt = document.createElement('option');
-                        opt.value = i.toString();
-                        opt.textContent = e.entryName || e.name || e.entrantName || ('Entry ' + (i + 1));
+                        opt.value = idx.toString();
+                        opt.textContent = e.entryName || e.name || e.entrantName || ('Entry ' + (idx + 1));
                         sel.appendChild(opt);
                     });
                     if (prev) sel.value = prev;
-                    // Show total entry count
                     const countSpan = document.getElementById('entryHighlightCount');
-                    if (countSpan) countSpan.textContent = entriesCache.length + ' entries';
+                    if (countSpan) countSpan.textContent = myEntries.length + (myEntries.length === 1 ? ' entry' : ' entries');
                 }
             } catch (e) { console.log('Could not load entries for selector:', e); }
         }
