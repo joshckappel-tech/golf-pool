@@ -198,6 +198,12 @@
             border: 1px solid rgba(34, 197, 94, 0.5);
         }
 
+        .status-closed {
+            background: rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, 0.5);
+        }
+
         .status-in-progress {
             background: rgba(59, 130, 246, 0.2);
             color: #93c5fd;
@@ -820,7 +826,7 @@
                             <div>
                                 <h4 class="text-xl font-bold mb-2">2026 Valspar Championship</h4>
                                 <div class="flex items-center gap-2">
-                                    <span class="status-badge status-open">Entries Open</span>
+                                    <span class="status-badge status-open" id="home-entries-badge">Entries Open</span>
                                 </div>
                                 <p class="text-sm mt-2" id="home-deadline" style="color:#94a3b8;"></p>
                                 <p class="text-xs mt-1" id="home-payment-note" style="color:#f59e0b;">Payment must be received by the submission deadline for entry to be accepted.</p>
@@ -6517,6 +6523,19 @@
             if (enterBtnWrap) enterBtnWrap.style.display = live ? 'none' : '';
             const homeDeadline = document.getElementById('home-deadline');
             if (homeDeadline) homeDeadline.style.display = live ? 'none' : '';
+            // Change Entries Open badge to Entries Closed when live
+            const entriesBadge = document.getElementById('home-entries-badge');
+            if (entriesBadge) {
+                if (live) {
+                    entriesBadge.textContent = 'Entries Closed';
+                    entriesBadge.classList.remove('status-open');
+                    entriesBadge.classList.add('status-closed');
+                } else {
+                    entriesBadge.textContent = 'Entries Open';
+                    entriesBadge.classList.remove('status-closed');
+                    entriesBadge.classList.add('status-open');
+                }
+            }
         }
 
         // Check if a specific entry can be edited by the participant
