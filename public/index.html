@@ -836,7 +836,7 @@
                                 <p class="text-slate-400 text-sm mt-2" id="home-prize-pool-sub">Be the first to enter!</p>
                             </div>
                         </div>
-                        <div class="mt-6 pt-6 border-t border-green-900/30">
+                        <div class="mt-6 pt-6 border-t border-green-900/30" id="home-enter-btn-wrap">
                             <button class="button-primary" onclick="goToTab('entry')">Enter Tournament</button>
                         </div>
                     </div>
@@ -3332,13 +3332,21 @@
             const pool = (entryCount || 0) * (entryFee || 30);
             const labels = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th'];
             let html = '';
+            let totalPct = 0;
+            let totalAmt = 0;
             pcts.forEach((pct, i) => {
                 if (pct > 0) {
                     const amt = Math.round(pool * (pct / 100));
+                    totalPct += pct;
+                    totalAmt += amt;
                     html += '<div class="flex justify-between"><span>' + labels[i] + ' (' + pct + '%)</span><span class="font-semibold" style="color:#c4a35a;">' + (pool > 0 ? '$' + amt.toLocaleString() : '—') + '</span></div>';
                 }
             });
-            if (html === '') html = '<p class="text-slate-500">Payout distribution not yet configured.</p>';
+            if (html === '') {
+                html = '<p class="text-slate-500">Payout distribution not yet configured.</p>';
+            } else {
+                html += '<div class="flex justify-between border-t border-slate-600 pt-2 mt-2 font-bold"><span>Total (' + totalPct + '%)</span><span style="color:#c4a35a;">' + (pool > 0 ? '$' + totalAmt.toLocaleString() : '—') + '</span></div>';
+            }
             container.innerHTML = html;
         }
 
@@ -6504,6 +6512,11 @@
             if (homeNote) homeNote.style.display = live ? 'none' : '';
             const myEntriesNote = document.getElementById('myentries-payment-note');
             if (myEntriesNote) myEntriesNote.style.display = live ? 'none' : '';
+            // Hide Enter Tournament button and submission deadline when live
+            const enterBtnWrap = document.getElementById('home-enter-btn-wrap');
+            if (enterBtnWrap) enterBtnWrap.style.display = live ? 'none' : '';
+            const homeDeadline = document.getElementById('home-deadline');
+            if (homeDeadline) homeDeadline.style.display = live ? 'none' : '';
         }
 
         // Check if a specific entry can be edited by the participant
