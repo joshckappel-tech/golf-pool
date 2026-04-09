@@ -6570,6 +6570,7 @@
                 return;
             }
 
+            const live = isPoolLive();
             let html = '';
             userEntries.forEach((entry, idx) => {
                 const tb = entry.tiebreaker !== null && entry.tiebreaker !== undefined ? formatScore(entry.tiebreaker) : '—';
@@ -6577,6 +6578,17 @@
                 const canDelete = isBeforeDeadline() && isEntriesOpen() && entry.paymentStatus !== 'paid';
                 const displayName = entry.entryName || ('Entry #' + (idx + 1));
                 const isPaid = entry.paymentStatus === 'paid';
+                // Look up rank, points, payout from leaderboard when live
+                let rankBadge = '';
+                let standingsMatch = null;
+                if (live && leaderboardData && leaderboardData.length > 0) {
+                    standingsMatch = leaderboardData.find(s => s.name === displayName);
+                    if (standingsMatch && standingsMatch.rank) {
+                        const suffix = standingsMatch.rank === 1 ? 'st' : standingsMatch.rank === 2 ? 'nd' : standingsMatch.rank === 3 ? 'rd' : 'th';
+                        const totalEntries = leaderboardData.length;
+                        rankBadge = '<span class="text-xs px-2 py-1 rounded font-semibold" style="background:rgba(196,163,90,0.15);border:1px solid rgba(196,163,90,0.3);color:#c4a35a;">' + standingsMatch.rank + suffix + ' of ' + totalEntries + '</span>';
+                    }
+                }
                 const paymentBadge = isPaid
                     ? '<span class="text-xs px-2 py-1 rounded" style="background:rgba(22,163,74,0.15);border:1px solid rgba(22,163,74,0.3);color:#16a34a;">Paid</span>'
                     : '<span class="text-xs px-2 py-1 rounded" style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:#f59e0b;">Payment Not Yet Confirmed</span>';
@@ -6589,6 +6601,7 @@
                                 <p class="text-xs text-slate-500">Submitted: ${new Date(entry.submittedAt).toLocaleDateString()}</p>
                             </div>
                             ${paymentBadge}
+                            ${rankBadge}
                             <button class="text-xs px-2 py-1 rounded" style="background:rgba(100,116,139,0.15);border:1px solid rgba(100,116,139,0.3);color:#94a3b8;" onclick="renameEntry('${entry.id}', ${idx})" title="Rename entry">&#9998;</button>
                         </div>
                         <div class="flex gap-2">
@@ -6606,6 +6619,7 @@
                         <div><span class="text-slate-400 text-xs block">Tiebreaker</span><span class="font-semibold">${tb}</span></div>
                         <div><span class="text-slate-400 text-xs block">Entry Fee</span><span class="font-semibold" style="color:#c4a35a;">$${poolSettings.entryFee}</span></div>
                     </div>
+                    ${live && standingsMatch ? '<div class="grid grid-cols-2 gap-3 text-sm mt-3 pt-3" style="border-top:1px solid rgba(100,116,139,0.2);"><div><span class="text-slate-400 text-xs block">Points</span><span class="font-bold text-lg">' + (standingsMatch.total !== undefined ? '$' + standingsMatch.total.toLocaleString() : '—') + '</span></div><div><span class="text-slate-400 text-xs block">Payout</span><span class="font-bold text-lg" style="color:#4ade80;">' + (standingsMatch.payout ? '$' + standingsMatch.payout.toLocaleString() : '—') + '</span></div></div>' : ''}
                     ${!isPaid && !isPoolLive() ? '<div class="mt-3 pt-3" style="border-top:1px solid rgba(100,116,139,0.2);"><p class="text-xs text-slate-500 mb-2">If you have already completed payment, please allow up to 24 hours for the pool commissioner to confirm your entry. If still not confirmed after 24 hours, please contact the pool commissioner.</p>' + (poolSettings.cheddarUpUrl ? '<a href="' + poolSettings.cheddarUpUrl + '" target="_blank" rel="noopener noreferrer" class="inline-block text-xs px-3 py-1.5 rounded font-semibold" style="background:rgba(196,163,90,0.2);border:1px solid rgba(196,163,90,0.4);color:#c4a35a;text-decoration:none;">Submit Payment via Cheddar Up &#8599;</a>' : '') + '</div>' : ''}
                     ${!isPaid && isPoolLive() ? '<div class="mt-3 pt-3" style="border-top:1px solid rgba(100,116,139,0.2);"><p class="text-xs text-slate-500">Payment submission is closed. Contact the pool commissioner if you have questions about your payment status.</p></div>' : ''}
                 </div>`;
