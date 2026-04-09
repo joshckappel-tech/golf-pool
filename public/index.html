@@ -6094,11 +6094,11 @@
         // Load saved session on page load
         function initAuth() {
             // Check if pool access was previously granted this session
-            if (sessionStorage.getItem('gp_pool_access') === 'true') {
+            if (localStorage.getItem('gp_pool_access') === 'true') {
                 poolAccessGranted = true;
                 document.getElementById('pool-gate').style.display = 'none';
             }
-            if (sessionStorage.getItem('gp_admin') === 'true') {
+            if (localStorage.getItem('gp_admin') === 'true') {
                 isAdminUser = true;
                 adminVerified = true;
                 poolAccessGranted = true;
@@ -6138,7 +6138,7 @@
             }).then(data => {
                 if (data.valid) {
                     poolAccessGranted = true;
-                    sessionStorage.setItem('gp_pool_access', 'true');
+                    localStorage.setItem('gp_pool_access', 'true');
                     document.getElementById('pool-gate').style.display = 'none';
                 } else {
                     document.getElementById('pool-gate-error').classList.remove('hidden');
@@ -6147,7 +6147,7 @@
                 // Fallback: check client-side if API isn't available
                 if (pw === poolSettings.poolPassword || pw === 'golf2026') {
                     poolAccessGranted = true;
-                    sessionStorage.setItem('gp_pool_access', 'true');
+                    localStorage.setItem('gp_pool_access', 'true');
                     document.getElementById('pool-gate').style.display = 'none';
                 } else {
                     document.getElementById('pool-gate-error').classList.remove('hidden');
@@ -6175,8 +6175,8 @@
                     isAdminUser = true;
                     adminVerified = true;
                     poolAccessGranted = true;
-                    sessionStorage.setItem('gp_pool_access', 'true');
-                    sessionStorage.setItem('gp_admin', 'true');
+                    localStorage.setItem('gp_pool_access', 'true');
+                    localStorage.setItem('gp_admin', 'true');
                     document.getElementById('pool-gate').style.display = 'none';
                     document.getElementById('admin-tab-btn').classList.remove('hidden');
                 } else {
@@ -6188,8 +6188,8 @@
                     isAdminUser = true;
                     adminVerified = true;
                     poolAccessGranted = true;
-                    sessionStorage.setItem('gp_pool_access', 'true');
-                    sessionStorage.setItem('gp_admin', 'true');
+                    localStorage.setItem('gp_pool_access', 'true');
+                    localStorage.setItem('gp_admin', 'true');
                     document.getElementById('pool-gate').style.display = 'none';
                     document.getElementById('admin-tab-btn').classList.remove('hidden');
                 } else {
@@ -6458,8 +6458,13 @@
             authToken = null;
             currentUser = null;
             adminVerified = false;
+            isAdminUser = false;
+            poolAccessGranted = false;
             localStorage.removeItem('gp_token');
+            localStorage.removeItem('gp_pool_access');
+            localStorage.removeItem('gp_admin');
             updateAuthUI();
+            document.getElementById('pool-gate').style.display = '';
             goToTab('home');
         }
 
