@@ -868,7 +868,45 @@ export async function GET(request: Request) {
       console.log(`[ESPN] Scoreboard API failed:`, e);
     }
 
-    // Step 2: Fall back to Core API (for historical/completed tournaments not on scoreboard)
+    // Step 2: If scoreboard returned data but no earnings and tournament looks complete,
+    // try Core API to get earnings data (Core API resolves statistics/$ref which has earnings)
+    if (scores && eventId && scores.players.length > 0) {
+      const hasEarnings = scores.players.some((p: any) => p.earnings != null && p.earnings > 0);
+      const tournamentStatus = scores.tournament?.status || '';
+      const roundDisplay = scores.tournament?.roundDisplay || '';
+      const isFinal = roundDisplay.toLowerCase().includes('final') || tournamentStatus.toLowerCase().includes('complete');
+
+      if (!hasEarnings && isFinal) {
+        console.log(`[ESPN] Tournament is final but scoreboard has no earnings — trying Core API for earnings...`);
+        try {
+          const coreScores = await fetchFromCoreApi(eventId);
+          if (coreScores && coreScores.players.length > 0) {
+            const coreHasEarnings = coreScores.players.some((p: any) => p.earnings != null && p.earnings > 0);
+            if (coreHasEarnings) {
+              // Merge earnings from Core API into scoreboard data (scoreboard has better ordering)
+              const earningsMap: Record<string, number> = {};
+              coreScores.players.forEach((p: any) => {
+                if (p.earnings != null && p.earnings > 0) earningsMap[p.name] = p.earnings;
+              });
+              let merged = 0;
+              scores.players.forEach((p: any) => {
+                if (earningsMap[p.name]) {
+                  p.earnings = earningsMap[p.name];
+                  merged++;
+                }
+              });
+              console.log(`[ESPN] Merged earnings from Core API for ${merged} players`);
+            } else {
+              console.log(`[ESPN] Core API also has no earnings`);
+            }
+          }
+        } catch (e) {
+          console.log(`[ESPN] Core API earnings fetch failed:`, e);
+        }
+      }
+    }
+
+    // Step 3: Fall back to Core API entirely (for historical/completed tournaments not on scoreboard)
     if (!scores && eventId) {
       console.log(`[ESPN] Using Core API for event ${eventId}...`);
       try {
