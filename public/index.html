@@ -3749,20 +3749,54 @@
             const headers = rows[0].map(h => String(h).trim().toLowerCase());
 
             // Detect columns flexibly
+            // findCol returns first column matching any term; findColExact requires exact match first
             const findCol = (...terms) => headers.findIndex(h => terms.some(t => h === t || h.includes(t)));
-            const fullNameCol = findCol('full name');
-            const firstNameCol = findCol('first name');
-            const lastNameCol = findCol('last name');
-            const emailCol = findCol('email address', 'email');
+            const findColExact = (...terms) => {
+                const exact = headers.findIndex(h => terms.some(t => h === t));
+                if (exact !== -1) return exact;
+                return headers.findIndex(h => terms.some(t => h.includes(t)));
+            };
+
+            // Entry Name is the primary identifier (CheddarUp Col T)
             const entryNameCol = findCol('entry name');
-            const statusCol = findCol('status', 'payment status', 'order status');
-            const amountCol = findCol('items total', 'amount', 'total', 'price');
+
+            // Entrant email — prefer "email address" (Col S) over "payer email" (Col G)
+            // Look for the LAST "email" column since entrant fields come after payer fields
+            let emailCol = -1;
+            const emailAddrCol = headers.findIndex(h => h === 'email address');
+            if (emailAddrCol !== -1) {
+                emailCol = emailAddrCol;
+            } else {
+                // Fallback: find any email column that isn't "payer email"
+                for (let ci = headers.length - 1; ci >= 0; ci--) {
+                    if (headers[ci].includes('email') && !headers[ci].includes('payer')) { emailCol = ci; break; }
+                }
+                if (emailCol === -1) emailCol = findCol('email');
+            }
+
+            // Entrant name — prefer non-payer First/Last Name (Cols Q/R) over Payer (Cols E/F)
+            // CheddarUp has both "Payer First Name" and "First Name"; we want the latter
+            let firstNameCol = -1, lastNameCol = -1, fullNameCol = -1;
+            // Find first name columns that are NOT payer columns
+            headers.forEach((h, ci) => {
+                if (h === 'first name' && firstNameCol === -1) firstNameCol = ci;
+                if (h === 'last name' && lastNameCol === -1) lastNameCol = ci;
+            });
+            // If no exact match, check for "payer first name" etc as fallback
+            if (firstNameCol === -1) firstNameCol = findCol('payer first name', 'first name');
+            if (lastNameCol === -1) lastNameCol = findCol('payer last name', 'last name');
+            fullNameCol = findCol('full name');
+
+            const statusCol = findCol('payment status', 'status', 'order status');
+            const amountCol = findCol('item total', 'items total', 'amount', 'total', 'price');
 
             const hasNameCol = fullNameCol !== -1 || firstNameCol !== -1;
             if (!hasNameCol && emailCol === -1 && entryNameCol === -1) {
                 alert('Could not find Name, Email, or Entry Name columns.\n\nDetected columns: ' + rows[0].join(', '));
                 return;
             }
+
+            console.log('[Payment Import] Columns detected — entryName:', entryNameCol, 'email:', emailCol, 'firstName:', firstNameCol, 'lastName:', lastNameCol, 'status:', statusCol, 'amount:', amountCol);
 
             // Parse all payment rows into buckets by status
             const paidPayments = [];
@@ -3914,14 +3948,17 @@
             const pEntry = normalizeStr(payment.entryName);
             const available = entries.filter(e => !usedIds.has(e.id));
 
-            // Priority 1: Exact entry name match
+            // -------------------------------------------------------
+            // PRIORITY 1: Entry Name (Col T) vs. site entry name
+            //   This is the most reliable match since it's set by the
+            //   entrant in CheddarUp to match their pool entry name.
+            // -------------------------------------------------------
             if (pEntry) {
+                // 1a: Exact entry name match
                 const exact = available.find(e => normalizeStr(e.entryName) === pEntry);
                 if (exact) return { entry: exact, method: 'entry name (exact)' };
-            }
 
-            // Priority 2: Fuzzy entry name match (similarity > 0.8)
-            if (pEntry) {
+                // 1b: Fuzzy entry name match (≥80% similarity)
                 let bestSim = 0, bestMatch = null;
                 available.forEach(e => {
                     const sim = stringSimilarity(pEntry, e.entryName);
@@ -3932,14 +3969,18 @@
                 }
             }
 
-            // Priority 3: Email match — if payment has email, match to entries by same email
+            // -------------------------------------------------------
+            // PRIORITY 2: Email Address (Col S) vs. site account email
+            //   Matches the entrant's email to the registered email on
+            //   the site. Handles multiple entries per email.
+            // -------------------------------------------------------
             if (pEmail) {
                 const emailMatches = available.filter(e => normalizeStr(e.email) === pEmail);
                 if (emailMatches.length === 1) {
                     return { entry: emailMatches[0], method: 'email' };
                 }
                 if (emailMatches.length > 1) {
-                    // Multiple entries from same email — try fuzzy entry name within those
+                    // Multiple entries from same email — try entry name within those
                     if (pEntry) {
                         let bestSim = 0, bestMatch = null;
                         emailMatches.forEach(e => {
@@ -3952,33 +3993,47 @@
                     }
                     // Try name match within email group
                     if (pName) {
-                        const nameMatch = emailMatches.find(e => normalizeStr(e.name) === pName);
+                        const nameMatch = emailMatches.find(e => normalizeStr(e.name) === pName || normalizeStr(e.entryName).includes(pName));
                         if (nameMatch) return { entry: nameMatch, method: 'email + name' };
                     }
-                    // Last resort: return first unmatched email entry
+                    // Return first unmatched email entry
                     return { entry: emailMatches[0], method: 'email (first available)' };
                 }
             }
 
-            // Priority 4: Name match (exact, then fuzzy)
+            // -------------------------------------------------------
+            // PRIORITY 3: First Name + Last Name (Cols Q/R) vs. site
+            //   Compares entrant name from spreadsheet to account name
+            //   or entry name on the site. Exact then fuzzy.
+            // -------------------------------------------------------
             if (pName) {
+                // 3a: Exact name match against entry owner name
                 const nameMatches = available.filter(e => normalizeStr(e.name) === pName);
                 if (nameMatches.length === 1) return { entry: nameMatches[0], method: 'name (exact)' };
-                if (nameMatches.length > 1 && pEntry) {
-                    let bestSim = 0, bestMatch = null;
-                    nameMatches.forEach(e => {
-                        const sim = stringSimilarity(pEntry, e.entryName);
-                        if (sim > bestSim) { bestSim = sim; bestMatch = e; }
-                    });
-                    if (bestMatch && bestSim >= 0.5) return { entry: bestMatch, method: 'name + entry name (' + Math.round(bestSim*100) + '%)' };
+                if (nameMatches.length > 1) {
+                    // Disambiguate with entry name
+                    if (pEntry) {
+                        let bestSim = 0, bestMatch = null;
+                        nameMatches.forEach(e => {
+                            const sim = stringSimilarity(pEntry, e.entryName);
+                            if (sim > bestSim) { bestSim = sim; bestMatch = e; }
+                        });
+                        if (bestMatch && bestSim >= 0.5) return { entry: bestMatch, method: 'name + entry name (' + Math.round(bestSim*100) + '%)' };
+                    }
                     return { entry: nameMatches[0], method: 'name (first available)' };
                 }
-                if (nameMatches.length > 0) return { entry: nameMatches[0], method: 'name (exact)' };
 
-                // Fuzzy name
+                // 3b: Check if name appears in entry name (e.g. "Josh Kappel" in "Josh Kappel 1")
+                const entryNameContains = available.filter(e => {
+                    const en = normalizeStr(e.entryName);
+                    return en && en.includes(pName);
+                });
+                if (entryNameContains.length === 1) return { entry: entryNameContains[0], method: 'name in entry name' };
+
+                // 3c: Fuzzy name match (≥80% similarity)
                 let bestSim = 0, bestMatch = null;
                 available.forEach(e => {
-                    const sim = stringSimilarity(pName, e.name);
+                    const sim = Math.max(stringSimilarity(pName, e.name), stringSimilarity(pName, e.entryName));
                     if (sim > bestSim) { bestSim = sim; bestMatch = e; }
                 });
                 if (bestMatch && bestSim >= 0.8) {
@@ -4048,11 +4103,15 @@
 
             // Will Mark as Paid
             if (matches.length > 0) {
-                html += '<h4 style="font-size:0.95rem;font-weight:600;color:#22c55e;margin-bottom:8px;">Will Mark as Paid (' + matches.length + '):</h4>';
+                html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">';
+                html += '<h4 style="font-size:0.95rem;font-weight:600;color:#22c55e;margin:0;">Will Mark as Paid (' + matches.length + ')</h4>';
+                html += '<div style="display:flex;gap:8px;"><a href="#" onclick="togglePaymentChecks(\'pay\',true);return false;" style="font-size:0.7rem;color:#60a5fa;text-decoration:underline;">Select All</a><a href="#" onclick="togglePaymentChecks(\'pay\',false);return false;" style="font-size:0.7rem;color:#94a3b8;text-decoration:underline;">Deselect All</a></div>';
+                html += '</div>';
                 html += '<table style="width:100%;font-size:0.78rem;margin-bottom:16px;border-collapse:collapse;">';
-                html += '<tr style="color:#94a3b8;text-align:left;border-bottom:1px solid rgba(100,116,139,0.3);"><th style="padding:5px;">CSV Payment</th><th style="padding:5px;">Matched Entry</th><th style="padding:5px;">Match Method</th></tr>';
-                matches.forEach(m => {
+                html += '<tr style="color:#94a3b8;text-align:left;border-bottom:1px solid rgba(100,116,139,0.3);"><th style="padding:5px;width:30px;"></th><th style="padding:5px;">CSV Payment</th><th style="padding:5px;">Matched Entry</th><th style="padding:5px;">Match Method</th></tr>';
+                matches.forEach((m, i) => {
                     html += '<tr style="border-bottom:1px solid rgba(100,116,139,0.15);">';
+                    html += '<td style="padding:5px;"><input type="checkbox" checked class="pay-check" data-idx="' + i + '" onchange="updatePaymentApplyBtn()" style="accent-color:#22c55e;"></td>';
                     html += '<td style="padding:5px;color:#e2e8f0;">' + (m.payment.entryName || m.payment.name || m.payment.email) + '</td>';
                     html += '<td style="padding:5px;color:#c4a35a;">' + (m.entry.entryName || m.entry.name) + '</td>';
                     html += '<td style="padding:5px;color:#64748b;font-size:0.7rem;">' + m.method + '</td>';
@@ -4063,11 +4122,15 @@
 
             // Refunded — should unpay
             if (incorrectlyPaid.length > 0) {
-                html += '<h4 style="font-size:0.95rem;font-weight:600;color:#ef4444;margin-bottom:8px;">Refunded — Should Unmark Paid (' + incorrectlyPaid.length + '):</h4>';
+                html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">';
+                html += '<h4 style="font-size:0.95rem;font-weight:600;color:#ef4444;margin:0;">Refunded — Should Unmark Paid (' + incorrectlyPaid.length + ')</h4>';
+                html += '<div style="display:flex;gap:8px;"><a href="#" onclick="togglePaymentChecks(\'unpay\',true);return false;" style="font-size:0.7rem;color:#60a5fa;text-decoration:underline;">Select All</a><a href="#" onclick="togglePaymentChecks(\'unpay\',false);return false;" style="font-size:0.7rem;color:#94a3b8;text-decoration:underline;">Deselect All</a></div>';
+                html += '</div>';
                 html += '<table style="width:100%;font-size:0.78rem;margin-bottom:16px;border-collapse:collapse;">';
-                html += '<tr style="color:#94a3b8;text-align:left;border-bottom:1px solid rgba(100,116,139,0.3);"><th style="padding:5px;">Entry</th><th style="padding:5px;">Payer</th><th style="padding:5px;">Match Method</th></tr>';
-                incorrectlyPaid.forEach(m => {
+                html += '<tr style="color:#94a3b8;text-align:left;border-bottom:1px solid rgba(100,116,139,0.3);"><th style="padding:5px;width:30px;"></th><th style="padding:5px;">Entry</th><th style="padding:5px;">Payer</th><th style="padding:5px;">Match Method</th></tr>';
+                incorrectlyPaid.forEach((m, i) => {
                     html += '<tr style="border-bottom:1px solid rgba(100,116,139,0.15);">';
+                    html += '<td style="padding:5px;"><input type="checkbox" checked class="unpay-check" data-idx="' + i + '" onchange="updatePaymentApplyBtn()" style="accent-color:#ef4444;"></td>';
                     html += '<td style="padding:5px;color:#ef4444;">' + (m.entry.entryName || m.entry.name) + '</td>';
                     html += '<td style="padding:5px;color:#e2e8f0;">' + m.payment.name + '</td>';
                     html += '<td style="padding:5px;color:#64748b;font-size:0.7rem;">' + m.method + '</td>';
@@ -4161,6 +4224,33 @@
             });
         }
 
+        function togglePaymentChecks(type, checked) {
+            const cls = type === 'pay' ? 'pay-check' : 'unpay-check';
+            document.querySelectorAll('.' + cls).forEach(cb => { cb.checked = checked; });
+            updatePaymentApplyBtn();
+        }
+
+        function updatePaymentApplyBtn() {
+            const payChecked = document.querySelectorAll('.pay-check:checked').length;
+            const unpayChecked = document.querySelectorAll('.unpay-check:checked').length;
+            const btn = document.getElementById('apply-payments-btn');
+            if (!btn) return;
+            const total = payChecked + unpayChecked;
+            if (total === 0) {
+                btn.textContent = 'No changes selected';
+                btn.disabled = true;
+                btn.style.opacity = '0.5';
+            } else {
+                let label = '';
+                if (payChecked > 0 && unpayChecked > 0) label = 'Mark ' + payChecked + ' Paid & Unpay ' + unpayChecked;
+                else if (payChecked > 0) label = 'Confirm & Mark ' + payChecked + ' as Paid';
+                else label = 'Unpay ' + unpayChecked + ' Refunded';
+                btn.textContent = label;
+                btn.disabled = false;
+                btn.style.opacity = '1';
+            }
+        }
+
         function closePaymentImportModal() {
             const modal = document.getElementById('payment-import-modal');
             if (modal) modal.remove();
@@ -4169,8 +4259,15 @@
         }
 
         async function applyPaymentMatches() {
-            const matches = window._pendingPaymentMatches || [];
-            const unpays = window._pendingPaymentUnpay || [];
+            const allMatches = window._pendingPaymentMatches || [];
+            const allUnpays = window._pendingPaymentUnpay || [];
+
+            // Only apply checked items
+            const payChecks = document.querySelectorAll('.pay-check:checked');
+            const unpayChecks = document.querySelectorAll('.unpay-check:checked');
+            const matches = Array.from(payChecks).map(cb => allMatches[parseInt(cb.dataset.idx)]);
+            const unpays = Array.from(unpayChecks).map(cb => allUnpays[parseInt(cb.dataset.idx)]);
+
             if (matches.length === 0 && unpays.length === 0) return;
 
             const btn = document.getElementById('apply-payments-btn');
@@ -4835,13 +4932,31 @@
             }
         }
 
-        function entryNext() {
+        async function entryNext() {
             const step = entrySteps[entryCurrentStep];
             if (step === 'info') {
                 const name = document.getElementById('entry-name').value.trim();
                 const email = document.getElementById('entry-email').value.trim();
                 const entryName = (document.getElementById('entry-entry-name') || {}).value?.trim() || (name + '_1');
                 if (!name || !email) { alert('Please enter your name and email.'); return; }
+                // Check entry name uniqueness
+                try {
+                    const res = await fetch('/api/entries');
+                    if (res.ok) {
+                        const allEntries = await res.json();
+                        const duplicate = allEntries.find(e => {
+                            // Allow the same name if editing an existing entry
+                            if (editingEntryId && e.id === editingEntryId) return false;
+                            return (e.entryName || '').trim().toLowerCase() === entryName.toLowerCase();
+                        });
+                        if (duplicate) {
+                            alert('The entry name "' + entryName + '" is already taken. Please choose a different entry name.');
+                            const entryNameEl = document.getElementById('entry-entry-name');
+                            if (entryNameEl) entryNameEl.focus();
+                            return;
+                        }
+                    }
+                } catch (e) { /* proceed if API unavailable */ }
                 entryPicks.name = name;
                 entryPicks.email = email;
                 entryPicks.entryName = entryName;
