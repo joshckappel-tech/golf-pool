@@ -5040,9 +5040,10 @@
             const fee = parseFloat((document.getElementById('admin-entry-fee') || {}).value.replace(/[^0-9.]/g,'')) || 30;
             const entriesEl = document.getElementById('admin-pool-entries');
             const poolTotalEl = document.getElementById('admin-pool-total');
-            // Fetch entry count for display and compute dollar amounts
-            fetch('/api/entries').then(r => r.json()).then(entries => {
-                const count = Array.isArray(entries) ? entries.length : 0;
+            // Fetch entry count for display and compute dollar amounts (match Home tab: non-rejected entries)
+            fetch('/api/entries').then(r => r.json()).then(allEntries => {
+                const entries = Array.isArray(allEntries) ? allEntries.filter(e => e.entryStatus !== 'rejected') : [];
+                const count = entries.length;
                 const pool = count * fee;
                 if (entriesEl) entriesEl.textContent = count + ' entries';
                 if (poolTotalEl) poolTotalEl.textContent = 'Pool: $' + pool.toLocaleString();
