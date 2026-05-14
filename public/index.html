@@ -5939,6 +5939,13 @@
                         return e.userId === currentUser.id || (e.email && currentUser.email && e.email.toLowerCase() === currentUser.email.toLowerCase());
                     });
 
+                    // Sort entries alphabetically by display name
+                    myEntries.sort((a, b) => {
+                        const nameA = (a.entryName || a.name || a.entrantName || '').toLowerCase();
+                        const nameB = (b.entryName || b.name || b.entrantName || '').toLowerCase();
+                        return nameA.localeCompare(nameB);
+                    });
+
                     const prev = sel.value;
                     sel.innerHTML = '<option value="">— Select an entry —</option>';
                     myEntries.forEach(e => {
