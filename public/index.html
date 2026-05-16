@@ -1300,6 +1300,8 @@
                                 </div>
                                 <button class="button-secondary text-xs px-3 py-1 self-end" onclick="applyPursePercentages()">Apply % to All</button>
                                 <button class="button-secondary text-xs px-3 py-1 self-end" onclick="resetProjectedPayoutsToDefaults()">Reset to Defaults</button>
+                                <button class="button-secondary text-xs px-3 py-1 self-end" onclick="document.getElementById('projected-payout-upload').click()">Upload from Excel</button>
+                                <input type="file" id="projected-payout-upload" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handlePayoutUpload(this)">
                                 <span class="text-xs text-slate-500 self-end" id="projectedPayoutsTotal">Total: $0</span>
                             </div>
                             <div id="admin-projected-payouts" class="space-y-1" style="max-height: 400px; overflow-y: auto; padding-right: 4px;">
@@ -5157,6 +5159,89 @@
             }
             const totalEl = document.getElementById('projectedPayoutsTotal');
             if (totalEl) totalEl.textContent = 'Total: $' + total.toLocaleString();
+        }
+
+        async function handlePayoutUpload(input) {
+            const file = input.files[0];
+            if (!file) return;
+            input.value = '';
+
+            let rows = [];
+            const isXlsx = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+            if (isXlsx) {
+                try {
+                    await loadSheetJS();
+                    const data = await file.arrayBuffer();
+                    const wb = XLSX.read(data, { type: 'array' });
+                    const ws = wb.Sheets[wb.SheetNames[0]];
+                    rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+                } catch (e) {
+                    alert('Failed to read Excel file: ' + e.message);
+                    return;
+                }
+            } else {
+                const text = await file.text();
+                rows = parseCSV(text);
+            }
+
+            if (rows.length < 2) { alert('File appears empty.'); return; }
+
+            const headers = rows[0].map(h => String(h).trim().toLowerCase());
+            const placeCol = headers.findIndex(h => h === 'place' || h === 'position' || h === 'pos' || h === 'rank');
+            const prizeCol = headers.findIndex(h => h === 'prize' || h === 'amount' || h === 'payout' || h === 'earnings' || h === 'winnings');
+
+            if (placeCol === -1 || prizeCol === -1) {
+                alert('Could not find Place and Prize columns.\n\nDetected headers: ' + rows[0].join(', ') + '\n\nExpected columns: Place, Prize');
+                return;
+            }
+
+            // Clear all current values first
+            for (let i = 0; i < 65; i++) {
+                const amtEl = document.getElementById('admin-proj-payout-' + i);
+                const pctEl = document.getElementById('admin-proj-pct-' + i);
+                if (amtEl) amtEl.value = 0;
+                if (pctEl) pctEl.value = '0.00';
+            }
+
+            // Parse and populate
+            let count = 0;
+            let totalPurseFromFile = 0;
+            for (let i = 1; i < rows.length; i++) {
+                const row = rows[i];
+                const place = parseInt(String(row[placeCol]).replace(/[^0-9]/g, ''));
+                const prize = parseFloat(String(row[prizeCol]).replace(/[^0-9.]/g, ''));
+                if (isNaN(place) || place < 1 || place > 65 || isNaN(prize)) continue;
+
+                const idx = place - 1;
+                const amtEl = document.getElementById('admin-proj-payout-' + idx);
+                if (amtEl) {
+                    amtEl.value = Math.round(prize);
+                    totalPurseFromFile += Math.round(prize);
+                    count++;
+                }
+            }
+
+            // Update purse from sum if it's larger than current
+            const currentPurse = getAdminPurse();
+            if (totalPurseFromFile > currentPurse) {
+                const purseEl = document.getElementById('admin-total-purse');
+                if (purseEl) purseEl.value = totalPurseFromFile.toLocaleString();
+                TOTAL_PURSE = totalPurseFromFile;
+            }
+
+            // Recalculate percentages
+            const purse = getAdminPurse();
+            for (let i = 0; i < 65; i++) {
+                const amtEl = document.getElementById('admin-proj-payout-' + i);
+                const pctEl = document.getElementById('admin-proj-pct-' + i);
+                if (amtEl && pctEl) {
+                    const amt = parseFloat(amtEl.value) || 0;
+                    pctEl.value = purse > 0 ? (amt / purse * 100).toFixed(2) : '0.00';
+                }
+            }
+
+            updateProjectedPayoutsTotal();
+            alert('Imported payouts for ' + count + ' positions from "' + file.name + '".');
         }
 
         function getAdminProjectedPayouts() {
