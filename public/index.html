@@ -1045,6 +1045,7 @@
                             <tr>
                                 <th style="width: 60px; cursor:pointer;" onclick="sortPoolStandings('rank')">Rank <span id="sort-icon-rank">▼</span></th>
                                 <th style="width: 150px; cursor:pointer;" onclick="sortPoolStandings('name')">Entrant <span id="sort-icon-name"></span></th>
+                                <th style="width: 150px; cursor:pointer;" onclick="sortPoolStandings('fullName')">Full Name <span id="sort-icon-fullName"></span></th>
                                 <th style="width: 140px; cursor:pointer;" onclick="sortPoolStandings('groupA')">Group A <span id="sort-icon-groupA"></span></th>
                                 <th style="width: 140px; cursor:pointer;" onclick="sortPoolStandings('groupB')">Group B <span id="sort-icon-groupB"></span></th>
                                 <th style="width: 140px; cursor:pointer;" onclick="sortPoolStandings('groupC')">Group C <span id="sort-icon-groupC"></span></th>
@@ -1365,6 +1366,7 @@
                     <div class="flex flex-wrap items-center gap-3 mb-4">
                         <button class="button-secondary text-sm" onclick="loadAdminEntries()">Refresh Entries</button>
                         <button class="button-secondary text-sm" onclick="exportEntriesToExcel()">Export to Excel</button>
+                        <button class="text-sm px-3 py-1.5 rounded" style="background:rgba(196,163,90,0.2); color:#c4a35a; border:1px solid rgba(196,163,90,0.5);" onclick="showPayoutRecipients()">Payout Recipients</button>
                         <button class="text-sm px-3 py-1.5 rounded" style="background:rgba(59,130,246,0.2); color:#60a5fa; border:1px solid rgba(59,130,246,0.4);" onclick="document.getElementById('csv-payment-file').click()">Import Payments</button>
                         <input type="file" id="csv-payment-file" accept=".csv,.xlsx,.xls" style="display:none;" onchange="handlePaymentImport(this)">
                         <button class="text-sm px-3 py-1.5 rounded" style="background:rgba(22,163,74,0.2); color:#22c55e; border:1px solid rgba(22,163,74,0.4);" onclick="bulkToggleEditable(true)">Enable All Editing</button>
@@ -1889,7 +1891,7 @@
             if (statusEl) statusEl.textContent = 'Saving groups...';
 
             try {
-                const groups = allGolfers.map(g => ({ name: g.name, odds: g.odds, group: g.group }));
+                const groups = allGolfers.map(g => ({ name: g.name, odds: g.odds, group: g.group, wd: !!g.wd }));
                 const res = await fetch('/api/settings', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -2318,19 +2320,29 @@
                     const card = document.createElement('div');
                     card.className = 'group-card flex items-center justify-between gap-2';
                     card.style.cursor = 'default';
+                    const isWd = !!golfer.wd;
+                    if (isWd) card.style.opacity = '0.6';
 
                     const safeName = golfer.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
                     const options = allGroupKeys
                         .map(k => `<option value="${k}" ${k === g ? 'selected' : ''}>${groupLabels[k]}</option>`)
                         .join('');
 
+                    const nameStyle = isWd ? 'cursor:pointer; text-decoration:line-through; color:#94a3b8;' : 'cursor:pointer;';
+                    const wdBadge = isWd ? ' <span style="background:rgba(239,68,68,0.2); color:#fca5a5; border:1px solid rgba(239,68,68,0.4); font-size:0.6rem; font-weight:700; padding:1px 5px; border-radius:4px; vertical-align:middle;">WD</span>' : '';
+                    const wdBtnStyle = isWd
+                        ? 'color:#fca5a5; background:rgba(239,68,68,0.25); border:1px solid rgba(239,68,68,0.6);'
+                        : 'color:#94a3b8; background:rgba(100,116,139,0.1); border:1px solid rgba(100,116,139,0.3);';
+
                     card.innerHTML = `
                         <div class="flex-1 min-w-0">
-                            <p class="font-bold text-sm golfer-name-display" style="cursor:pointer;" title="Click to edit name"
-                               onclick="startEditGolferName(this, '${safeName}')">${golfer.name}</p>
+                            <p class="font-bold text-sm golfer-name-display" style="${nameStyle}" title="Click to edit name"
+                               onclick="startEditGolferName(this, '${safeName}')">${golfer.name}</p>${wdBadge}
                             ${golfer.odds ? '<p class="text-xs text-slate-500">' + golfer.odds + '</p>' : ''}
                         </div>
                         <div class="flex items-center gap-1 flex-shrink-0">
+                            <button onclick="toggleGolferWD('${safeName}')" title="${isWd ? 'Reinstate golfer (remove WD)' : 'Mark as withdrawn (WD)'}"
+                                class="text-xs px-1.5 py-1 rounded font-semibold" style="${wdBtnStyle}">WD</button>
                             <select onchange="moveGolfer('${safeName}', this.value)"
                                 class="text-xs rounded px-2 py-1 border"
                                 style="background: rgba(15,23,42,0.8); border-color: rgba(22,163,74,0.5); color: #f8fafc;">
@@ -2359,6 +2371,83 @@
             golferGroups = getGolferGroupNames();
             renderField();
             renderAdminGolfers();
+        }
+
+        // =====================================================
+        // Withdrawn (WD) golfer handling
+        // =====================================================
+        // Toggle a golfer's withdrawn (WD) status and persist it.
+        async function toggleGolferWD(name) {
+            const golfer = allGolfers.find(g => g.name === name);
+            if (!golfer) return;
+            golfer.wd = !golfer.wd;
+
+            // Re-render admin + field views immediately
+            renderAdminGolfers();
+            renderField();
+
+            // Persist the updated groups (including wd flag)
+            const statusEl = document.getElementById('golfer-groups-status');
+            try {
+                if (statusEl) statusEl.textContent = golfer.wd
+                    ? 'Marking ' + name + ' as withdrawn...'
+                    : 'Reinstating ' + name + '...';
+                const groups = allGolfers.map(g => ({ name: g.name, odds: g.odds, group: g.group, wd: !!g.wd }));
+                const res = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ golferGroups: groups }),
+                });
+                if (statusEl) {
+                    statusEl.textContent = res.ok
+                        ? (golfer.wd
+                            ? name + ' marked WD. New entrants can no longer pick this golfer; affected entrants can replace them from My Entries.'
+                            : name + ' reinstated and selectable again.')
+                        : 'Failed to save withdrawal status.';
+                    setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 6000);
+                }
+            } catch (e) {
+                console.error('toggleGolferWD save failed:', e);
+                if (statusEl) statusEl.textContent = 'Error saving withdrawal status.';
+            }
+        }
+
+        // Is a golfer (by name) currently marked withdrawn?
+        function isGolferWD(name) {
+            if (!name) return false;
+            const lower = name.toLowerCase();
+            const g = allGolfers.find(x => x.name.toLowerCase() === lower);
+            return !!(g && g.wd);
+        }
+
+        // Find a golfer's live score row (fuzzy match, mirrors getGolferPrize lookup)
+        function findScoreRow(name) {
+            if (!name || !Array.isArray(tournamentScores)) return null;
+            const lower = name.toLowerCase();
+            let row = tournamentScores.find(s => (s.name || '').toLowerCase() === lower);
+            if (row) return row;
+            const parts = name.split(' ');
+            const first = (parts[0] || '').toLowerCase();
+            const last = (parts[parts.length - 1] || '').toLowerCase();
+            row = tournamentScores.find(s => {
+                const sn = (s.name || '').toLowerCase();
+                return sn.includes(last) && sn.includes(first);
+            });
+            return row || null;
+        }
+
+        // Has a golfer begun playing / posting scores? (cross-check Tournament tab)
+        // Used to prevent picking a replacement golfer who is already underway.
+        function golferHasStarted(name) {
+            const row = findScoreRow(name);
+            if (!row) return false; // no score row yet => has not started
+            const thru = (row.thru === undefined || row.thru === null) ? '' : String(row.thru).trim();
+            // '--', '', '-' indicate not yet teed off; anything else (a number, 'F', etc.) means underway/finished
+            if (thru && thru !== '--' && thru !== '-') return true;
+            // Fallbacks: a recorded round-1 score or a numeric "today" also indicate play has begun
+            if (row.r1 !== undefined && row.r1 !== null && row.r1 !== '') return true;
+            if (typeof row.today === 'number') return true;
+            return false;
         }
 
         // =====================================================
@@ -2978,7 +3067,7 @@
                 if (contentEl) contentEl.style.display = '';
             }
 
-            tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:20px; color:#94a3b8;">Loading pool standings...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="12" style="text-align:center; padding:20px; color:#94a3b8;">Loading pool standings...</td></tr>';
 
             // Ensure live scores are loaded
             if (!liveScoresReady) {
@@ -3000,7 +3089,7 @@
             const paidEntries = entries.filter(e => e.paymentStatus === 'paid' && e.entryStatus !== 'rejected');
 
             if (paidEntries.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:20px; color:#94a3b8;">' + (entries.length > 0 ? 'No paid entries yet. Entries appear here once payment is confirmed.' : 'No entries submitted yet. Be the first to enter!') + '</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="12" style="text-align:center; padding:20px; color:#94a3b8;">' + (entries.length > 0 ? 'No paid entries yet. Entries appear here once payment is confirmed.' : 'No entries submitted yet. Be the first to enter!') + '</td></tr>';
                 // Update header
                 const statusEl = document.querySelector('#leaderboard .status-badge');
                 if (statusEl) statusEl.textContent = '0 Entries';
@@ -3028,6 +3117,7 @@
 
                 return {
                     name: entry.entryName || entry.name || entry.entrantName || 'Unknown',
+                    fullName: entry.name || entry.entrantName || '',
                     userId: entry.userId || null,
                     email: entry.email || null,
                     groupA: { golfer: pickA, amount: prizeA },
@@ -3109,7 +3199,7 @@
             tbody.innerHTML = '';
 
             if (data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:20px; color:#94a3b8;">No entries match your search.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="12" style="text-align:center; padding:20px; color:#94a3b8;">No entries match your search.</td></tr>';
                 return;
             }
 
@@ -3123,7 +3213,7 @@
             if (myEntries.length > 0 && !isAdminUser) {
                 // Render "My Entries" header row
                 const headerRow = document.createElement('tr');
-                headerRow.innerHTML = '<td colspan="11" style="padding:8px 12px; background:rgba(196,163,90,0.1); border-bottom:1px solid rgba(196,163,90,0.3); font-size:0.8rem; font-weight:600; color:#c4a35a;">My Entries</td>';
+                headerRow.innerHTML = '<td colspan="12" style="padding:8px 12px; background:rgba(196,163,90,0.1); border-bottom:1px solid rgba(196,163,90,0.3); font-size:0.8rem; font-weight:600; color:#c4a35a;">My Entries</td>';
                 tbody.appendChild(headerRow);
 
                 myEntries.forEach(entry => {
@@ -3132,7 +3222,7 @@
 
                 // Separator
                 const sepRow = document.createElement('tr');
-                sepRow.innerHTML = '<td colspan="11" style="padding:6px 12px; background:rgba(100,116,139,0.08); border-bottom:1px solid rgba(100,116,139,0.2); font-size:0.75rem; color:#64748b;">All Entries</td>';
+                sepRow.innerHTML = '<td colspan="12" style="padding:6px 12px; background:rgba(100,116,139,0.08); border-bottom:1px solid rgba(100,116,139,0.2); font-size:0.75rem; color:#64748b;">All Entries</td>';
                 tbody.appendChild(sepRow);
             }
 
@@ -3162,6 +3252,7 @@
                 row.innerHTML = `
                     <td><span class="rank-badge ${rankBadgeClass}">${entry.rank}</span></td>
                     <td>${displayName}</td>
+                    <td>${entry.fullName || '—'}</td>
                     <td>
                         <div class="text-sm font-semibold">${entry.groupA.golfer || '—'}</div>
                         <div class="text-xs text-slate-400">${formatPrizeMoney(entry.groupA.amount)}</div>
@@ -3208,6 +3299,7 @@
                 rows += '<tr>' +
                     '<td style="text-align:center;font-weight:600;">' + entry.rank + '</td>' +
                     '<td>' + (entry.name || '') + '</td>' +
+                    '<td>' + (entry.fullName || '') + '</td>' +
                     '<td>' + (entry.groupA.golfer || '') + '</td>' +
                     '<td>' + (entry.groupB.golfer || '') + '</td>' +
                     '<td>' + (entry.groupC.golfer || '') + '</td>' +
@@ -3237,6 +3329,7 @@
                 '<table><thead><tr>' +
                 '<th style="text-align:center;width:40px;">Rank</th>' +
                 '<th>Entry</th>' +
+                '<th>Full Name</th>' +
                 '<th>Group A</th><th>Group B</th><th>Group C</th><th>Group D</th>' +
                 '<th>WC 1</th><th>WC 2</th>' +
                 '<th style="text-align:right;">Points</th>' +
@@ -3250,6 +3343,111 @@
             printWindow.document.write(html);
             printWindow.document.close();
             printWindow.onload = function() { printWindow.print(); };
+        }
+
+        // =====================================================
+        // ADMIN: Payout Recipients (name + email of entrants in the money)
+        // =====================================================
+        let payoutRecipientsData = [];
+        async function showPayoutRecipients() {
+            // Make sure standings + payouts have been calculated
+            if (!leaderboardData || leaderboardData.length === 0) {
+                await loadAndRenderPoolLeaderboard();
+            }
+
+            payoutRecipientsData = (leaderboardData || [])
+                .filter(e => e.payout && e.payout > 0)
+                .slice()
+                .sort((a, b) => a.rank - b.rank);
+
+            const totalPayout = payoutRecipientsData.reduce((sum, e) => sum + (e.payout || 0), 0);
+
+            let rowsHtml;
+            if (payoutRecipientsData.length === 0) {
+                rowsHtml = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#94a3b8;">No entrants are currently in a paid position. Payouts appear once the pool is live and has paid entries.</td></tr>';
+            } else {
+                rowsHtml = payoutRecipientsData.map(e => {
+                    const suffix = e.rank === 1 ? 'st' : e.rank === 2 ? 'nd' : e.rank === 3 ? 'rd' : 'th';
+                    return '<tr>' +
+                        '<td style="padding:8px; border-bottom:1px solid rgba(22,163,74,0.2);"><span class="rank-badge ' + (e.rank === 1 ? 'rank-1-badge' : e.rank <= 3 ? 'rank-2-badge' : 'rank-3-badge') + '">' + e.rank + '</span></td>' +
+                        '<td style="padding:8px; border-bottom:1px solid rgba(22,163,74,0.2);">' + (e.name || '—') + '</td>' +
+                        '<td style="padding:8px; border-bottom:1px solid rgba(22,163,74,0.2);">' + (e.fullName || '—') + '</td>' +
+                        '<td style="padding:8px; border-bottom:1px solid rgba(22,163,74,0.2); color:#93c5fd;">' + (e.email || '—') + '</td>' +
+                        '<td style="padding:8px; border-bottom:1px solid rgba(22,163,74,0.2); text-align:right; font-weight:700; color:#4ade80;">' + formatPrizeMoney(e.payout) + '</td>' +
+                        '</tr>';
+                }).join('');
+            }
+
+            let modal = document.getElementById('payout-recipients-modal');
+            if (modal) modal.remove();
+            modal = document.createElement('div');
+            modal.id = 'payout-recipients-modal';
+            modal.style.cssText = 'position:fixed; inset:0; z-index:100; background:rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; padding:16px;';
+            modal.onclick = function(ev) { if (ev.target === modal) closePayoutRecipients(); };
+            modal.innerHTML = `
+                <div style="background:#0f172a; border:1px solid rgba(22,163,74,0.4); border-radius:12px; max-width:760px; width:100%; max-height:88vh; overflow:auto; box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:18px 20px; border-bottom:1px solid rgba(22,163,74,0.25); position:sticky; top:0; background:#0f172a;">
+                        <div>
+                            <h3 style="font-size:1.3rem; font-weight:700; color:#c4a35a;">Payout Recipients</h3>
+                            <p style="font-size:0.8rem; color:#94a3b8; margin-top:2px;">${payoutRecipientsData.length} entrant${payoutRecipientsData.length === 1 ? '' : 's'} in the money &middot; Total payouts: ${formatPrizeMoney(totalPayout)}</p>
+                        </div>
+                        <button onclick="closePayoutRecipients()" style="background:rgba(100,116,139,0.2); color:#94a3b8; border:1px solid rgba(100,116,139,0.3); border-radius:6px; padding:6px 12px; cursor:pointer; font-weight:600;">Close</button>
+                    </div>
+                    <div style="padding:16px 20px;">
+                        ${payoutRecipientsData.length > 0 ? '<div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;"><button class="button-secondary text-sm" onclick="copyPayoutEmails()">Copy Emails</button><button class="button-secondary text-sm" onclick="exportPayoutRecipientsCSV()">Export CSV</button><span id="payout-recipients-copy-status" class="text-xs self-center" style="color:#4ade80;"></span></div>' : ''}
+                        <table style="width:100%; border-collapse:collapse; font-size:0.875rem;">
+                            <thead>
+                                <tr style="text-align:left; color:#16a34a;">
+                                    <th style="padding:8px; border-bottom:2px solid rgba(22,163,74,0.4); width:60px;">Rank</th>
+                                    <th style="padding:8px; border-bottom:2px solid rgba(22,163,74,0.4);">Entry Name</th>
+                                    <th style="padding:8px; border-bottom:2px solid rgba(22,163,74,0.4);">Full Name</th>
+                                    <th style="padding:8px; border-bottom:2px solid rgba(22,163,74,0.4);">Email</th>
+                                    <th style="padding:8px; border-bottom:2px solid rgba(22,163,74,0.4); text-align:right;">Payout</th>
+                                </tr>
+                            </thead>
+                            <tbody>${rowsHtml}</tbody>
+                        </table>
+                    </div>
+                </div>`;
+            document.body.appendChild(modal);
+        }
+
+        function closePayoutRecipients() {
+            const modal = document.getElementById('payout-recipients-modal');
+            if (modal) modal.remove();
+        }
+
+        function copyPayoutEmails() {
+            const emails = payoutRecipientsData.map(e => e.email).filter(Boolean);
+            const statusEl = document.getElementById('payout-recipients-copy-status');
+            if (emails.length === 0) { if (statusEl) statusEl.textContent = 'No emails available.'; return; }
+            const text = emails.join('; ');
+            const done = () => { if (statusEl) { statusEl.textContent = 'Copied ' + emails.length + ' email(s).'; setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 4000); } };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(done).catch(() => {
+                    prompt('Copy the emails below:', text);
+                });
+            } else {
+                prompt('Copy the emails below:', text);
+            }
+        }
+
+        function exportPayoutRecipientsCSV() {
+            if (payoutRecipientsData.length === 0) return;
+            const esc = (v) => '"' + String(v === undefined || v === null ? '' : v).replace(/"/g, '""') + '"';
+            let csv = 'Rank,Entry Name,Full Name,Email,Payout\n';
+            payoutRecipientsData.forEach(e => {
+                csv += [esc(e.rank), esc(e.name), esc(e.fullName), esc(e.email), esc(e.payout)].join(',') + '\n';
+            });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'payout-recipients.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         }
 
         // Filter Leaderboard
@@ -3268,7 +3466,7 @@
             if (clearBtn) clearBtn.style.display = (hasAnyFilter || searchInput) ? '' : 'none';
 
             const filteredData = leaderboardData.filter(entry => {
-                if (searchInput && !(entry.name || '').toLowerCase().includes(searchInput)) return false;
+                if (searchInput && !(entry.name || '').toLowerCase().includes(searchInput) && !(entry.fullName || '').toLowerCase().includes(searchInput)) return false;
                 if (fA && (entry.groupA?.golfer || '').toLowerCase() !== fA) return false;
                 if (fB && (entry.groupB?.golfer || '').toLowerCase() !== fB) return false;
                 if (fC && (entry.groupC?.golfer || '').toLowerCase() !== fC) return false;
@@ -3298,10 +3496,10 @@
                 poolSortAsc = !poolSortAsc;
             } else {
                 poolSortColumn = column;
-                poolSortAsc = column === 'rank' || column === 'name' || column === 'tb';
+                poolSortAsc = column === 'rank' || column === 'name' || column === 'fullName' || column === 'tb';
             }
             // Clear all sort icons
-            ['rank','name','groupA','groupB','groupC','groupD','wc1','wc2','total','tb','payout'].forEach(c => {
+            ['rank','name','fullName','groupA','groupB','groupC','groupD','wc1','wc2','total','tb','payout'].forEach(c => {
                 const icon = document.getElementById('sort-icon-' + c);
                 if (icon) icon.textContent = c === column ? (poolSortAsc ? '▲' : '▼') : '';
             });
@@ -3310,6 +3508,7 @@
                 switch (column) {
                     case 'rank': valA = a.rank; valB = b.rank; break;
                     case 'name': valA = (a.name || '').toLowerCase(); valB = (b.name || '').toLowerCase(); return poolSortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                    case 'fullName': valA = (a.fullName || '').toLowerCase(); valB = (b.fullName || '').toLowerCase(); return poolSortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
                     case 'groupA': valA = a.groupA?.amount || 0; valB = b.groupA?.amount || 0; break;
                     case 'groupB': valA = a.groupB?.amount || 0; valB = b.groupB?.amount || 0; break;
                     case 'groupC': valA = a.groupC?.amount || 0; valB = b.groupC?.amount || 0; break;
@@ -4758,6 +4957,15 @@
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         ${golfers.map(p => {
                             const sel = currentPick === p.name;
+                            if (p.wd) {
+                                return `<div class="golfer-card" style="opacity:0.5; cursor:not-allowed;" title="${p.name} has withdrawn and cannot be selected">
+                                    <h4 class="font-bold text-lg mb-1" style="text-decoration:line-through;">${p.name}</h4>
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-xs text-slate-400">${groupLabels[step]}</span>
+                                        <span class="status-badge status-closed">WD</span>
+                                    </div>
+                                </div>`;
+                            }
                             return `<div class="golfer-card ${sel ? 'selected' : ''}" onclick="entrySelectGolfer('${step}','${p.name.replace(/'/g,"\\'")}')">
                                 <h4 class="font-bold text-lg mb-1">${p.name}</h4>
                                 <div class="flex justify-between items-center">
@@ -4790,6 +4998,12 @@
                             const is2 = wc2 === p.name;
                             const sel = is1 || is2;
                             const badge = is1 ? 'WC1' : (is2 ? 'WC2' : '');
+                            if (p.wd) {
+                                return `<div class="golfer-card" data-name="${p.name.toLowerCase()}" style="opacity:0.5; cursor:not-allowed;" title="${p.name} has withdrawn and cannot be selected">
+                                    <h4 class="font-bold text-sm" style="text-decoration:line-through;">${p.name}</h4>
+                                    <span class="status-badge status-closed mt-1">WD</span>
+                                </div>`;
+                            }
                             return `<div class="golfer-card ${sel ? 'selected' : ''}" data-name="${p.name.toLowerCase()}" onclick="entrySelectWC('${p.name.replace(/'/g,"\\'")}')">
                                 <h4 class="font-bold text-sm">${p.name}</h4>
                                 ${sel ? `<span class="gold-badge mt-1">${badge}</span>` : ''}
@@ -6869,6 +7083,8 @@
                 const tb = entry.tiebreaker !== null && entry.tiebreaker !== undefined ? formatScore(entry.tiebreaker) : '—';
                 const editable = canEditEntry(entry);
                 const canDelete = isBeforeDeadline() && isEntriesOpen() && entry.paymentStatus !== 'paid';
+                const withdrawnPicks = getWithdrawnPicksForEntry(entry);
+                const showReplace = live && withdrawnPicks.length > 0;
                 const displayName = entry.entryName || ('Entry #' + (idx + 1));
                 const isPaid = entry.paymentStatus === 'paid';
                 // Look up rank, points, payout from leaderboard when live
@@ -6898,10 +7114,12 @@
                             <button class="text-xs px-2 py-1 rounded" style="background:rgba(100,116,139,0.15);border:1px solid rgba(100,116,139,0.3);color:#94a3b8;" onclick="renameEntry('${entry.id}', ${idx})" title="Rename entry">&#9998;</button>
                         </div>
                         <div class="flex gap-2">
+                            ${showReplace ? '<button class="text-sm px-3 py-1 rounded font-semibold" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.45);color:#fca5a5;" onclick="replaceWithdrawnGolfers(\'' + entry.id + '\')">Replace WD Golfer' + (withdrawnPicks.length > 1 ? 's' : '') + '</button>' : ''}
                             ${editable ? '<button class="text-sm px-3 py-1 rounded" style="background:rgba(196,163,90,0.15);border:1px solid rgba(196,163,90,0.3);color:#c4a35a;" onclick="editEntry(\'' + entry.id + '\')">Edit Picks</button>' : '<span class="text-xs px-2 py-1 rounded" style="background:rgba(100,116,139,0.2);color:#94a3b8;">Locked</span>'}
                             ${canDelete ? '<button class="text-sm px-3 py-1 rounded" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#ef4444;" onclick="deleteEntry(\'' + entry.id + '\', \'' + displayName.replace(/'/g, "\\\\'") + '\')">Delete</button>' : ''}
                         </div>
                     </div>
+                    ${showReplace ? '<div class="mb-4 p-3 rounded" style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.35);"><p class="text-sm font-semibold" style="color:#fca5a5;">&#9888; Withdrawn golfer in this entry</p><p class="text-xs text-slate-300 mt-1">' + withdrawnPicks.map(w => w.label + ': <strong>' + w.golfer + '</strong>').join(' &middot; ') + '</p><p class="text-xs text-slate-400 mt-1">Use <strong>Replace WD Golfer' + (withdrawnPicks.length > 1 ? 's' : '') + '</strong> to pick a replacement from the same group who has not yet teed off.</p></div>' : ''}
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                         <div><span class="text-slate-400 text-xs block">Group A</span><span class="font-semibold">${entry.groupA || '—'}</span></div>
                         <div><span class="text-slate-400 text-xs block">Group B</span><span class="font-semibold">${entry.groupB || '—'}</span></div>
@@ -6961,7 +7179,10 @@
                 const golfers = gg[group] || [];
                 let opts = '<option value="">— Select —</option>';
                 golfers.forEach(g => {
-                    opts += '<option value="' + g.name.replace(/"/g, '&quot;') + '"' + (current === g.name ? ' selected' : '') + '>' + g.name + '</option>';
+                    // Skip withdrawn golfers, unless this entry currently holds them (so the value isn't silently lost)
+                    if (g.wd && current !== g.name) return;
+                    const wdLabel = g.wd ? ' (WD)' : '';
+                    opts += '<option value="' + g.name.replace(/"/g, '&quot;') + '"' + (current === g.name ? ' selected' : '') + '>' + g.name + wdLabel + '</option>';
                 });
                 return opts;
             }
@@ -6971,7 +7192,9 @@
                 const wcGolfers = allSorted.filter(g => g.group === 'WC');
                 let opts = '<option value="">— Select —</option>';
                 wcGolfers.forEach(g => {
-                    opts += '<option value="' + g.name.replace(/"/g, '&quot;') + '"' + (current === g.name ? ' selected' : '') + '>' + g.name + '</option>';
+                    if (g.wd && current !== g.name) return;
+                    const wdLabel = g.wd ? ' (WD)' : '';
+                    opts += '<option value="' + g.name.replace(/"/g, '&quot;') + '"' + (current === g.name ? ' selected' : '') + '>' + g.name + wdLabel + '</option>';
                 });
                 return opts;
             }
@@ -7145,6 +7368,142 @@
         function cancelEditPicks() {
             editingEntryId = null;
             renderMyEntries();
+        }
+
+        // =====================================================
+        // REPLACE WITHDRAWN GOLFER (allowed even when pool is live)
+        // =====================================================
+        // The pick slots and which golfer group each draws from.
+        const ENTRY_PICK_SLOTS = [
+            { field: 'groupA', group: 'A', label: 'Group A' },
+            { field: 'groupB', group: 'B', label: 'Group B' },
+            { field: 'groupC', group: 'C', label: 'Group C' },
+            { field: 'groupD', group: 'D', label: 'Group D' },
+            { field: 'wildCard1', group: 'WC', label: 'Wild Card 1' },
+            { field: 'wildCard2', group: 'WC', label: 'Wild Card 2' },
+        ];
+
+        // Return the slots in an entry whose picked golfer is currently withdrawn.
+        function getWithdrawnPicksForEntry(entry) {
+            if (!entry) return [];
+            const out = [];
+            ENTRY_PICK_SLOTS.forEach(slot => {
+                const golfer = entry[slot.field];
+                if (golfer && isGolferWD(golfer)) {
+                    out.push({ field: slot.field, group: slot.group, label: slot.label, golfer });
+                }
+            });
+            return out;
+        }
+
+        // Golfers in a group that are valid replacements: not withdrawn, not already
+        // started/posting scores, and not already used elsewhere in this entry.
+        function getReplacementOptions(group, excludeNames) {
+            const exclude = new Set((excludeNames || []).map(n => (n || '').toLowerCase()));
+            return allGolfers
+                .filter(g => g.group === group && !g.wd && !golferHasStarted(g.name) && !exclude.has(g.name.toLowerCase()))
+                .sort((a, b) => a.name.localeCompare(b.name));
+        }
+
+        function replaceWithdrawnGolfers(entryId) {
+            const entry = userEntries.find(e => e.id === entryId);
+            if (!entry) return;
+            const withdrawn = getWithdrawnPicksForEntry(entry);
+            if (withdrawn.length === 0) { alert('This entry no longer has any withdrawn golfers.'); return; }
+            editingEntryId = entryId;
+            renderReplaceWithdrawnPage(entry, withdrawn);
+        }
+
+        function renderReplaceWithdrawnPage(entry, withdrawn) {
+            const container = document.getElementById('myentries-container');
+            if (!container) return;
+
+            const withdrawnFields = new Set(withdrawn.map(w => w.field));
+            // Picks we are keeping (not being replaced) — replacements can't duplicate these
+            const keptPicks = ENTRY_PICK_SLOTS
+                .filter(s => !withdrawnFields.has(s.field))
+                .map(s => entry[s.field])
+                .filter(Boolean);
+
+            let slotsHtml = '';
+            let anyUnavailable = false;
+            withdrawn.forEach(w => {
+                const options = getReplacementOptions(w.group, keptPicks);
+                let optsHtml = '<option value="">— Select replacement —</option>';
+                options.forEach(g => {
+                    optsHtml += '<option value="' + g.name.replace(/"/g, '&quot;') + '">' + g.name + (g.odds ? ' (' + g.odds + ')' : '') + '</option>';
+                });
+                const noneLeft = options.length === 0;
+                if (noneLeft) anyUnavailable = true;
+                slotsHtml += `
+                    <div class="mb-4">
+                        <label class="block text-xs font-semibold text-slate-400 mb-1">${w.label} — replacing <span style="text-decoration:line-through; color:#fca5a5;">${w.golfer}</span> <span class="status-badge status-closed ml-1">WD</span></label>
+                        ${noneLeft
+                            ? '<p class="text-sm" style="color:#fca5a5;">No eligible replacements remain in this group — every other golfer has already teed off. Contact the pool commissioner.</p>'
+                            : '<select id="replace-' + w.field + '" data-group="' + w.group + '" class="w-full border border-green-700/30 rounded px-3 py-2 text-sm" style="background:#1a2e1a; color:#f8fafc;">' + optsHtml + '</select>'}
+                    </div>`;
+            });
+
+            container.innerHTML = `
+                <div class="stat-card max-w-2xl">
+                    <div class="mb-6">
+                        <h3 class="text-2xl font-bold mb-2">Replace Withdrawn Golfer${withdrawn.length > 1 ? 's' : ''}</h3>
+                        <p class="text-slate-400 text-sm">Your entry contains a golfer who has withdrawn. Choose a replacement from the same group. Only golfers who have <strong>not yet started play</strong> are listed (cross-checked against the live Tournament leaderboard).</p>
+                        <div class="mt-2 p-3 rounded" style="background:rgba(30,58,31,0.4); border:1px solid rgba(22,163,74,0.2);">
+                            <span class="text-sm text-slate-300"><strong>Entry:</strong> ${entry.entryName || entry.name || 'Unknown'} &middot; <strong>Name:</strong> ${entry.name || 'Unknown'}</span>
+                        </div>
+                    </div>
+                    ${slotsHtml}
+                    <div class="flex gap-3 mt-2">
+                        ${anyUnavailable && withdrawn.length === 1 ? '' : '<button class="button-primary" onclick="saveWithdrawnReplacements(\'' + entry.id + '\')">Save Replacement' + (withdrawn.length > 1 ? 's' : '') + '</button>'}
+                        <button class="button-secondary" onclick="cancelEditPicks()">Cancel</button>
+                    </div>
+                </div>`;
+        }
+
+        async function saveWithdrawnReplacements(entryId) {
+            const entry = userEntries.find(e => e.id === entryId);
+            if (!entry) return;
+            const withdrawn = getWithdrawnPicksForEntry(entry);
+            if (withdrawn.length === 0) { cancelEditPicks(); return; }
+
+            // Collect selections
+            const updates = {};
+            for (const w of withdrawn) {
+                const sel = document.getElementById('replace-' + w.field);
+                if (!sel) continue; // slot had no eligible replacements
+                const val = sel.value;
+                if (!val) { alert('Please choose a replacement for ' + w.label + '.'); return; }
+                // Re-validate against current state (scores may have changed)
+                if (isGolferWD(val)) { alert(val + ' has also withdrawn. Please choose another golfer.'); return; }
+                if (golferHasStarted(val)) { alert(val + ' has already started play and can no longer be selected. Please choose another golfer.'); return; }
+                updates[w.field] = val;
+            }
+
+            if (Object.keys(updates).length === 0) { alert('No replacements available to save.'); return; }
+
+            // Build the full set of picks after replacement and check for duplicates
+            const finalPicks = {};
+            ENTRY_PICK_SLOTS.forEach(s => { finalPicks[s.field] = (updates[s.field] !== undefined) ? updates[s.field] : entry[s.field]; });
+            const names = ENTRY_PICK_SLOTS.map(s => finalPicks[s.field]).filter(Boolean).map(n => n.toLowerCase());
+            const dupe = names.find((n, i) => names.indexOf(n) !== i);
+            if (dupe) { alert('You cannot pick the same golfer twice. Please choose different replacements.'); return; }
+
+            try {
+                const res = await fetch('/api/entries', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: entryId, ...updates })
+                });
+                if (res.ok) {
+                    editingEntryId = null;
+                    await loadMyEntries();
+                } else {
+                    alert('Failed to save replacement. Please try again.');
+                }
+            } catch (e) {
+                alert('Error saving replacement.');
+            }
         }
 
         // =====================================================
