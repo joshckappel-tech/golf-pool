@@ -868,7 +868,7 @@
                             <ul class="space-y-2 text-sm text-slate-300">
                                 <li>• Base Score: Total Prize Money earned by 6 golfers</li>
                                 <li>• Wild cards: 2x multiplier on Prize Money</li>
-                                <li>• Tiebreaker used to settle any ties</li>
+                                <li>• Ties broken by the pick closest to the actual winning score (equal distance = tie)</li>
                                 <li>• Real-time leaderboard updates</li>
                                 <li>• Real-time scenario generator</li>
                             </ul>
@@ -3131,28 +3131,58 @@
                 };
             });
 
-            // Sort by total (descending), then tiebreaker (closest to winning score without going over)
-            // For now, sort by total descending; tiebreaker breaks ties
+            // Actual winning score = the current tournament leader's score to par (lowest).
+            // Updates live and becomes the final winning score once the tournament completes.
+            const numericScores = (tournamentScores || [])
+                .map(s => s.score)
+                .filter(v => typeof v === 'number');
+            const actualWinningScore = numericScores.length ? Math.min(...numericScores) : null;
+
+            // Distance of a predicted tiebreaker from the actual winning score (closest wins).
+            const tbDist = (tb) => (actualWinningScore === null || typeof tb !== 'number')
+                ? Infinity
+                : Math.abs(tb - actualWinningScore);
+
+            // Sort by total (descending); break ties by closest predicted score to the actual
+            // winning score. Equal distances remain genuinely tied.
             standings.sort((a, b) => {
                 if (b.total !== a.total) return b.total - a.total;
-                // Tiebreaker: closest without going over (Price is Right rules)
-                // Lower (more negative) tiebreaker = better if winning score is low
-                // For now, just sort by tiebreaker ascending (lower = better)
-                const tbA = typeof a.tb === 'number' ? a.tb : 999;
-                const tbB = typeof b.tb === 'number' ? b.tb : 999;
-                return tbA - tbB;
+                if (actualWinningScore === null) {
+                    // No live winning score yet — fall back to lowest predicted score
+                    const tbA = typeof a.tb === 'number' ? a.tb : 999;
+                    const tbB = typeof b.tb === 'number' ? b.tb : 999;
+                    return tbA - tbB;
+                }
+                return tbDist(a.tb) - tbDist(b.tb);
             });
 
-            // Assign ranks
-            standings.forEach((s, i) => { s.rank = i + 1; });
+            // Assign ranks, giving equal rank to entries tied on points AND tiebreaker distance.
+            standings.forEach((s, i) => {
+                if (i === 0) { s.rank = 1; return; }
+                const prev = standings[i - 1];
+                const tiedWithPrev = (s.total === prev.total)
+                    && (actualWinningScore !== null)
+                    && (tbDist(s.tb) === tbDist(prev.tb));
+                s.rank = tiedWithPrev ? prev.rank : (i + 1);
+            });
 
-            // Calculate payouts
+            // Calculate payouts. When entries tie, they split the combined payout for the
+            // places they occupy evenly (total paid out stays equal to the pool amount).
             const entryFee = poolSettings.entryFee || 30;
             const payouts = getPayoutStructure(paidEntries.length, entryFee);
-            standings.forEach(s => {
-                const p = payouts.find(p => p.place === s.rank);
-                s.payout = p ? p.amount : 0;
-            });
+            const payoutByPlace = {};
+            payouts.forEach(p => { payoutByPlace[p.place] = p.amount; });
+            let gi = 0;
+            while (gi < standings.length) {
+                let gj = gi;
+                while (gj + 1 < standings.length && standings[gj + 1].rank === standings[gi].rank) gj++;
+                const groupSize = gj - gi + 1;
+                let sum = 0;
+                for (let place = gi + 1; place <= gj + 1; place++) sum += (payoutByPlace[place] || 0);
+                const each = groupSize > 0 ? Math.round(sum / groupSize) : 0;
+                for (let k = gi; k <= gj; k++) standings[k].payout = each;
+                gi = gj + 1;
+            }
 
             // Store for filtering
             leaderboardData = standings;
@@ -4764,9 +4794,19 @@
                 return 0;
             }
 
-            // Build standings for both original and scenario
-            function buildStandings(prizeMap) {
-                return entries.map(entry => {
+            // Winning score (to par) for tiebreakers = the leader's score in each scenario.
+            const minScore = (rows) => {
+                const nums = (rows || []).map(r => r.score).filter(v => typeof v === 'number');
+                return nums.length ? Math.min(...nums) : null;
+            };
+            const origWinningScore = minScore(tournamentScores);
+            const scenWinningScore = minScore(adjustedScores);
+            const tbDistFor = (tb, winning) => (winning === null || typeof tb !== 'number') ? Infinity : Math.abs(tb - winning);
+
+            // Build standings for a given prize map + winning score, applying the
+            // closest-to-winning-score tiebreaker (equal distance = shared rank).
+            function buildStandings(prizeMap, winningScore) {
+                const rows = entries.map(entry => {
                     const picks = [
                         entry.groupA || entry.pickGroupA || '',
                         entry.groupB || entry.pickGroupB || '',
@@ -4785,15 +4825,26 @@
                         total: total,
                         tb: entry.tiebreaker !== undefined ? entry.tiebreaker : 999,
                     };
-                }).sort((a, b) => b.total !== a.total ? b.total - a.total : a.tb - b.tb);
+                });
+                rows.sort((a, b) => {
+                    if (b.total !== a.total) return b.total - a.total;
+                    if (winningScore === null) return a.tb - b.tb;
+                    return tbDistFor(a.tb, winningScore) - tbDistFor(b.tb, winningScore);
+                });
+                // Tie-aware ranks: equal points AND equal tiebreaker distance share a rank.
+                rows.forEach((s, i) => {
+                    if (i === 0) { s.rank = 1; return; }
+                    const prev = rows[i - 1];
+                    const tied = (s.total === prev.total)
+                        && (winningScore !== null)
+                        && (tbDistFor(s.tb, winningScore) === tbDistFor(prev.tb, winningScore));
+                    s.rank = tied ? prev.rank : (i + 1);
+                });
+                return rows;
             }
 
-            const originalStandings = buildStandings(originalPrizeMap);
-            const scenarioStandings = buildStandings(scenarioPrizeMap);
-
-            // Assign ranks
-            originalStandings.forEach((s, i) => { s.rank = i + 1; });
-            scenarioStandings.forEach((s, i) => { s.rank = i + 1; });
+            const originalStandings = buildStandings(originalPrizeMap, origWinningScore);
+            const scenarioStandings = buildStandings(scenarioPrizeMap, scenWinningScore);
 
             // Build rank lookup for original
             const origRankMap = {};
@@ -5022,7 +5073,7 @@
                 el.innerHTML = `
                     <div class="mb-6">
                         <h3 class="text-2xl font-bold mb-2">Tiebreaker</h3>
-                        <p class="text-slate-400">What will the winning score (to par) be? Closest without going over wins.</p>
+                        <p class="text-slate-400">What will the winning score (to par) be? If entries tie on points, the pick closest to the actual winning score wins. Equal distances stay tied.</p>
                     </div>
                     <div class="max-w-sm">
                         <label class="block text-sm font-semibold mb-3">Winning Score to Par</label>
